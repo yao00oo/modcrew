@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Install ModCrew</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="install">
+    <nav>
+      <a href="/" class="logo">ModCrew</a>
+    </nav>
+    <main>
+      <h1>Install ModCrew</h1>
+      <p class="lead">Two steps. About 30 seconds.</p>
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h2>Add ModCrew to Claude Code</h2>
+          <p>Copy this command and paste into Claude Code:</p>
+          <div class="code-block">
+            <code id="mcp-cmd">Loading token...</code>
+            <button id="copy-btn">Copy</button>
+          </div>
+          <p class="hint" id="token-hint">Generating your token…</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h2>Add ModCrew to Chrome</h2>
+          <p>Install the Chrome extension:</p>
+          <a id="chrome-store-link" class="btn-primary" href="https://chrome.google.com/webstore/detail/modcrew/PLACEHOLDER_ID" target="_blank">Add to Chrome</a>
+          <p class="hint">After installing, this page will detect it automatically.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h2>Paired</h2>
+          <div id="pair-status" class="pair-status pending">
+            <span class="dot"></span>
+            <span id="pair-msg">Waiting for extension…</span>
+          </div>
+          <p class="hint">When you see ✅ Paired, you're ready. Talk to Claude Code:<br />
+            <code>modcrew snapshot the current tab</code></p>
+        </div>
+      </div>
+    </main>
+
+    <script src="install.js"></script>
+  </body>
+</html>

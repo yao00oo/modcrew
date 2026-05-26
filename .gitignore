@@ -1,0 +1,22 @@
+# Node
+node_modules/
+*.log
+.DS_Store
+
+# Wrangler
+.wrangler/
+
+# Build
+worker/dist/
+
+# 私钥（绝对不能 commit！）
+extension/modcrew.pem
+*.pem
+
+# IDE
+.vscode/
+.idea/
+
+# Env
+.env
+.env.local

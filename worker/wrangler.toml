@@ -1,0 +1,18 @@
+name = "modcrew-worker"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 自定义域名：api.modcrew.dev
+[[routes]]
+pattern = "api.modcrew.dev"
+custom_domain = true
+
+# Durable Object：每个 token 一个独立实例
+[[durable_objects.bindings]]
+name = "MODCREW_SESSION"
+class_name = "ModCrewSession"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ModCrewSession"]

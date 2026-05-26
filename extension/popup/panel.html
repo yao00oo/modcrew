@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ModCrew</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header>
+      <h1>ModCrew</h1>
+      <div id="status" class="status disconnected">●</div>
+    </header>
+
+    <section class="connection-info">
+      <div id="connection-text" class="hint"></div>
+    </section>
+
+    <section class="current-domain">
+      <h2 id="current-domain-name">—</h2>
+      <ul id="mods-list" class="mods-list"></ul>
+    </section>
+
+    <footer>
+      <a href="https://modcrew.dev/install" target="_blank">Pair / Reset</a>
+    </footer>
+
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>
