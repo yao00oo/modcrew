@@ -1,0 +1,21 @@
+{
+  "name": "modcrew-mcp",
+  "version": "0.0.1",
+  "description": "MCP installer / config helper for ModCrew. The actual MCP runs on api.modcrew.dev — this package just helps users set it up.",
+  "homepage": "https://modcrew.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yao00oo/modcrew.git"
+  },
+  "bin": {
+    "modcrew-mcp": "./bin.js"
+  },
+  "keywords": [
+    "modcrew",
+    "mcp",
+    "claude-code",
+    "browser-modification"
+  ],
+  "license": "MIT",
+  "author": "yao00oo"
+}

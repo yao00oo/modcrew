@@ -13,6 +13,7 @@
 
 import { openDB, getMods, saveMod } from "./shared/storage.js";
 import { getApiBase, wsUrl } from "./shared/config.js";
+import { maybeCheck as maybeCheckUpdate } from "./shared/update-check.js";
 import { handleSnapshot } from "./shared/handlers/snapshot.js";
 import { handleFindElement } from "./shared/handlers/find-element.js";
 import { handleInjectCss } from "./shared/handlers/inject-css.js";
@@ -188,9 +189,12 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     if (msg.type === "get_status") {
+      const { updateInfo } = await chrome.storage.local.get("updateInfo");
       sendResponse({
         connected: ws && ws.readyState === WebSocket.OPEN,
         token: currentToken,
+        update: updateInfo || null,
+        version: chrome.runtime.getManifest().version,
       });
     } else if (msg.type === "get_mods_for_domain") {
       const mods = await getMods(msg.domain);
@@ -206,6 +210,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // === 启动 ===
 openDB().then(() => connect());
+
+// 每次 SW 启动检查一次更新（内部 24h 限速）
+maybeCheckUpdate().catch(() => {});
 
 chrome.action.onClicked.addListener(async (tab) => {
   try {

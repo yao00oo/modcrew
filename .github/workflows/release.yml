@@ -1,0 +1,39 @@
+name: Build & Release extension
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from tag
+        id: ver
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Pack extension
+        run: |
+          cd extension
+          # 排除私钥和不需要的文件
+          zip -r ../modcrew-extension-${{ steps.ver.outputs.version }}.zip . \
+            -x "*.pem" "*.DS_Store" ".gitignore" "__MACOSX/*"
+          ls -lh ../modcrew-extension-${{ steps.ver.outputs.version }}.zip
+
+      - name: Create / update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "v${{ steps.ver.outputs.version }}" \
+            "modcrew-extension-${{ steps.ver.outputs.version }}.zip" \
+            --clobber || \
+          gh release create "v${{ steps.ver.outputs.version }}" \
+            "modcrew-extension-${{ steps.ver.outputs.version }}.zip" \
+            --title "ModCrew v${{ steps.ver.outputs.version }}" \
+            --generate-notes

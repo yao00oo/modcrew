@@ -1,0 +1,20 @@
+{
+  "name": "modcrew",
+  "version": "0.0.1",
+  "description": "Mod the web. Together. AI-powered website modification via Claude Code. See https://modcrew.dev",
+  "homepage": "https://modcrew.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yao00oo/modcrew.git"
+  },
+  "keywords": [
+    "modcrew",
+    "claude-code",
+    "mcp",
+    "browser-extension",
+    "website-modification",
+    "userscript"
+  ],
+  "license": "MIT",
+  "author": "yao00oo"
+}

@@ -19,6 +19,19 @@ async function refreshStatus() {
     connTextEl.innerHTML =
       'Not paired. Visit <a href="https://modcrew.dev/install" target="_blank">modcrew.dev/install</a>';
   }
+
+  // 更新提示
+  const banner = document.getElementById("update-banner");
+  if (resp?.update) {
+    const u = resp.update;
+    banner.style.display = "block";
+    banner.innerHTML =
+      `🎉 New version <b>v${u.latest}</b> available (you have v${resp.version}). ` +
+      `<a href="${u.zipUrl || u.url}" target="_blank">Download</a> · ` +
+      `<a href="${u.url}" target="_blank">What's new</a>`;
+  } else {
+    banner.style.display = "none";
+  }
 }
 
 async function refreshMods() {
