@@ -34,9 +34,22 @@ async function refreshStatus() {
     statusEl.className = "status disconnected";
   }
 
-  if (resp?.mcpUrl) {
+  // unverified = 首装/重装后 SW 生成了一个候选 token，但还没经过 modcrew.dev 的 localStorage
+  // 对帐。这时 popup 不显示命令（避免用户拿到错的 token 去配 Claude Code），
+  // 而是引导用户访问 modcrew.dev/install 触发同步。
+  if (resp?.unverified) {
+    currentCmd = "";
+    cmdEl.innerHTML =
+      '<a href="https://modcrew.dev/install" target="_blank" style="color:#fff;text-decoration:underline">' +
+      "Click here to finalize setup" +
+      "</a><br><span style=\"opacity:.7\">Restores your previous token if you've installed before.</span>";
+    setupHint.textContent = "Finalizing... your token may change after sync.";
+    copyBtn.style.display = "none";
+  } else if (resp?.mcpUrl) {
     currentCmd = buildCmd(resp.mcpUrl);
     cmdEl.textContent = currentCmd;
+    copyBtn.style.display = "";
+    setupHint.textContent = "Paste in your terminal where Claude Code runs.";
   }
 
   if (resp?.update) {

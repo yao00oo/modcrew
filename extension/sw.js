@@ -40,20 +40,82 @@ async function ensureToken() {
   const data = await chrome.storage.local.get("modcrew_token");
   if (data.modcrew_token) return data.modcrew_token;
   const fresh = crypto.randomUUID();
-  await chrome.storage.local.set({ modcrew_token: fresh });
-  console.log("[modcrew] generated new token on first run");
+  // 标记 unverified：只是初始化用的「候选 token」。
+  // 用户访问 modcrew.dev 一次后，content/token-sync.js 会跟 localStorage 对帐：
+  //   - 如果之前装过（localStorage 里有旧 token），扩展会被 *替换* 成旧 token（恢复 Claude Code 配置）
+  //   - 如果是真·首装（localStorage 空），扩展把这个 token 写到 localStorage 作备份，清掉 unverified
+  await chrome.storage.local.set({
+    modcrew_token: fresh,
+    modcrew_token_unverified: true,
+  });
+  console.log("[modcrew] generated tentative token; awaiting modcrew.dev sync");
   return fresh;
 }
 
 async function regenerateToken() {
   const fresh = crypto.randomUUID();
-  await chrome.storage.local.set({ modcrew_token: fresh });
+  // 明确用户意图：直接 verified，下次 content script 同步会把 localStorage 也更新
+  await chrome.storage.local.set({
+    modcrew_token: fresh,
+    modcrew_token_unverified: false,
+  });
   if (ws) {
     try { ws.close(); } catch {}
   }
   reconnectDelay = 1000;
   connect();
   return fresh;
+}
+
+// 在 modcrew.dev 上跑的 content script 通过 chrome.runtime.sendMessage 调这个
+// 决策表：
+//   localTok = 网页 localStorage 里的 token (可能 null)
+//   swTok    = chrome.storage 里的 token
+//   uv       = modcrew_token_unverified (true = 初始化时拍脑袋生成的候选)
+//
+//   uv=true, localTok 存在 且 ≠ swTok  → 恢复场景：用 localTok 覆盖 swTok，清 uv，重连 WS
+//   uv=true, localTok = swTok           → 已同步：清 uv
+//   uv=true, localTok 空                → 首装：把 swTok 写到 localStorage，清 uv
+//   uv=false, localTok 空               → 备份缺失（之前没访问过 modcrew.dev）：写 localStorage
+//   uv=false, localTok ≠ swTok          → 用户主动 regenerate 过：swTok 是权威，覆盖 localStorage
+//   uv=false, localTok = swTok          → 稳态：noop
+async function handleSyncTokenFromPage(localTok) {
+  const data = await chrome.storage.local.get([
+    "modcrew_token",
+    "modcrew_token_unverified",
+  ]);
+  const swTok = data.modcrew_token;
+  const uv = data.modcrew_token_unverified === true;
+
+  if (!swTok) return { action: "noop" }; // 不应该发生（ensureToken 已运行）
+
+  // 恢复场景
+  if (uv && localTok && localTok !== swTok) {
+    await chrome.storage.local.set({
+      modcrew_token: localTok,
+      modcrew_token_unverified: false,
+    });
+    currentToken = localTok;
+    if (ws) {
+      try { ws.close(); } catch {}
+    }
+    reconnectDelay = 1000;
+    connect();
+    return { action: "noop", restored: true };
+  }
+
+  // uv=true, localTok 已是同一个或为空 → 标记 verified，必要时备份
+  if (uv) {
+    await chrome.storage.local.set({ modcrew_token_unverified: false });
+    if (!localTok) return { action: "update_local_storage", token: swTok };
+    return { action: "noop" };
+  }
+
+  // verified 状态：保 localStorage 和 swTok 一致（regenerate / 缺备份场景）
+  if (!localTok || localTok !== swTok) {
+    return { action: "update_local_storage", token: swTok };
+  }
+  return { action: "noop" };
 }
 
 async function connect() {
@@ -226,6 +288,15 @@ async function handleModcrewApiCall(method, args) {
 // 内部消息（popup / content script / offscreen）
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
+    if (msg.type === "sync_token_from_page") {
+      try {
+        const result = await handleSyncTokenFromPage(msg.localStorageToken);
+        sendResponse(result);
+      } catch (e) {
+        sendResponse({ action: "noop", error: e?.message ?? String(e) });
+      }
+      return;
+    }
     if (msg.type === "modcrew-api-call") {
       try {
         const result = await handleModcrewApiCall(msg.method, msg.args || []);
@@ -236,13 +307,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       return;
     }
     if (msg.type === "get_status") {
-      const { updateInfo } = await chrome.storage.local.get("updateInfo");
+      const { updateInfo, modcrew_token_unverified } = await chrome.storage.local.get([
+        "updateInfo",
+        "modcrew_token_unverified",
+      ]);
       const base = await getApiBase();
       sendResponse({
         connected: ws && ws.readyState === WebSocket.OPEN,
         token: currentToken,
         mcpUrl: currentToken ? `${base}/mcp/${currentToken}` : null,
         apiBase: base,
+        unverified: modcrew_token_unverified === true,
         update: updateInfo || null,
         version: chrome.runtime.getManifest().version,
       });
@@ -275,6 +350,28 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 // 启动
 openDB().then(() => connect());
+
+// 启动后尝试自动 sync：如果当前 token 是 unverified（首装 / 重装后初始化），
+// 看用户有没有 modcrew.dev tab 开着，有的话注入 content script 跑一次 sync，
+// 不用用户手动访问就能恢复。
+async function tryAutoSyncOnStart() {
+  const data = await chrome.storage.local.get("modcrew_token_unverified");
+  if (!data.modcrew_token_unverified) return;
+  try {
+    const tabs = await chrome.tabs.query({
+      url: ["https://modcrew.dev/*", "https://www.modcrew.dev/*"],
+    });
+    for (const tab of tabs) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ["content/token-sync.js"],
+        });
+      } catch {}
+    }
+  } catch {}
+}
+tryAutoSyncOnStart().catch(() => {});
 
 maybeCheckUpdate().catch(() => {});
 
