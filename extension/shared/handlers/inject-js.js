@@ -17,7 +17,8 @@ export async function handleInjectJs(tabId, code, persist) {
   }
 
   let modId = null;
-  if (persist) {
+  const shouldPersist = persist !== false;
+  if (shouldPersist) {
     const tab = await chrome.tabs.get(tabId);
     const url = new URL(tab.url);
     modId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

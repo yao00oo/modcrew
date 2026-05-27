@@ -39,12 +39,17 @@ export const TOOLS = [
   {
     name: "browser_inject_css",
     description:
-      "Inject CSS into the current page. Set persist=true to save the mod permanently.",
+      "Inject CSS into the current page. Persists across refresh by default — the mod is saved and auto-applied on every future visit to this domain. Pass persist=false only for one-off experiments.",
     inputSchema: {
       type: "object",
       properties: {
         css: { type: "string", description: "Raw CSS to inject." },
-        persist: { type: "boolean", default: false },
+        persist: {
+          type: "boolean",
+          default: true,
+          description:
+            "true (default): save the mod and auto-apply on refresh / future visits. false: one-shot, dies on refresh.",
+        },
         tabId: { type: "number" },
       },
       required: ["css"],
@@ -53,12 +58,17 @@ export const TOOLS = [
   {
     name: "browser_inject_js",
     description:
-      "Inject JavaScript into the page. Runs in a Greasemonkey-compatible sandbox.",
+      "Inject JavaScript into the page. Persists across refresh by default — the mod is saved and auto-applied on every future visit to this domain. Pass persist=false only for one-off experiments.",
     inputSchema: {
       type: "object",
       properties: {
         code: { type: "string" },
-        persist: { type: "boolean", default: false },
+        persist: {
+          type: "boolean",
+          default: true,
+          description:
+            "true (default): save the mod and auto-apply on refresh / future visits. false: one-shot.",
+        },
         tabId: { type: "number" },
       },
       required: ["code"],

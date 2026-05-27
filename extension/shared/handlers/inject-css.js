@@ -7,7 +7,9 @@ export async function handleInjectCss(tabId, css, persist) {
   });
 
   let modId = null;
-  if (persist) {
+  // 默认 persist=true（默认让改动留下来；只有显式传 false 才一次性）
+  const shouldPersist = persist !== false;
+  if (shouldPersist) {
     const tab = await chrome.tabs.get(tabId);
     const url = new URL(tab.url);
     modId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
