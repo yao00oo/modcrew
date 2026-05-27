@@ -1,10 +1,12 @@
-// IndexedDB：mod 库
-// schema:
-//   mods: { id, domain, urlPattern, intent, type ('css'|'js'),
-//           content, enabled, createdAt }
+// IndexedDB schema (v3):
+//   mods:  { id, domain, urlPattern, intent, type ('css'|'js'),
+//            content, enabled, createdAt }
+//   audit: { id (auto), timestamp, tool, method, args (short summary),
+//            ok, error, durationMs }
 
 const DB_NAME = "modcrew";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
+const AUDIT_KEEP = 200;
 let dbPromise = null;
 
 export function openDB() {
@@ -18,7 +20,6 @@ export function openDB() {
         const store = db.createObjectStore("mods", { keyPath: "id" });
         store.createIndex("domain", "domain", { unique: false });
       }
-      // v1 → v2: backfill enabled=true for old rows
       if (oldV < 2) {
         const tx = ev.target.transaction;
         const store = tx.objectStore("mods");
@@ -31,6 +32,13 @@ export function openDB() {
           }
           cur.continue();
         };
+      }
+      if (oldV < 3 && !db.objectStoreNames.contains("audit")) {
+        const audit = db.createObjectStore("audit", {
+          keyPath: "id",
+          autoIncrement: true,
+        });
+        audit.createIndex("timestamp", "timestamp", { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -50,13 +58,12 @@ export async function saveMod(mod) {
   });
 }
 
-// Match by hostname index, then filter by urlPattern against full URL
 export async function getModsMatching(url) {
   const u = new URL(url);
   const candidates = await getModsForDomain(u.hostname);
   return candidates.filter((m) => {
     if (m.enabled === false) return false;
-    if (!m.urlPattern) return true; // legacy: hostname-only match
+    if (!m.urlPattern) return true;
     return matchesPattern(url, m.urlPattern);
   });
 }
@@ -72,7 +79,6 @@ export async function getModsForDomain(domain) {
   });
 }
 
-// Back-compat alias (some callers still use getMods)
 export const getMods = getModsForDomain;
 
 export async function deleteMod(id) {
@@ -115,9 +121,7 @@ export async function getAllMods() {
   });
 }
 
-// Greasemonkey-style match: * = any char run, otherwise literal
 export function matchesPattern(url, pattern) {
-  // 把 * 转 .*, 其他特殊字符转义
   const re = new RegExp(
     "^" +
       pattern
@@ -127,4 +131,113 @@ export function matchesPattern(url, pattern) {
       "$"
   );
   return re.test(url);
+}
+
+// === Audit log ===
+
+export async function appendAudit(entry) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("audit", "readwrite");
+    tx.objectStore("audit").add({ timestamp: Date.now(), ...entry });
+    tx.oncomplete = () => {
+      resolve();
+      // 异步裁剪：超过 AUDIT_KEEP 删旧的
+      pruneAudit().catch(() => {});
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function pruneAudit() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("audit", "readwrite");
+    const store = tx.objectStore("audit");
+    const countReq = store.count();
+    countReq.onsuccess = () => {
+      const total = countReq.result;
+      if (total <= AUDIT_KEEP) {
+        resolve();
+        return;
+      }
+      let toDelete = total - AUDIT_KEEP;
+      const cursorReq = store.openCursor();
+      cursorReq.onsuccess = (e) => {
+        const cur = e.target.result;
+        if (!cur || toDelete <= 0) return;
+        cur.delete();
+        toDelete--;
+        cur.continue();
+      };
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getRecentAudit(limit = 50) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("audit", "readonly");
+    const idx = tx.objectStore("audit").index("timestamp");
+    const out = [];
+    const req = idx.openCursor(null, "prev"); // 最新在前
+    req.onsuccess = (e) => {
+      const cur = e.target.result;
+      if (!cur || out.length >= limit) {
+        resolve(out);
+        return;
+      }
+      out.push(cur.value);
+      cur.continue();
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clearAudit() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("audit", "readwrite");
+    tx.objectStore("audit").clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// === Host disable / write permission (chrome.storage.local) ===
+
+const DISABLED_HOSTS_KEY = "modcrew_disabled_hosts";
+const WRITES_KEY = "modcrew_writes_enabled";
+
+export async function isHostDisabled(host) {
+  if (!host) return false;
+  const data = await chrome.storage.local.get(DISABLED_HOSTS_KEY);
+  const list = data[DISABLED_HOSTS_KEY] || [];
+  return list.includes(host);
+}
+
+export async function setHostDisabled(host, disabled) {
+  if (!host) return;
+  const data = await chrome.storage.local.get(DISABLED_HOSTS_KEY);
+  const list = new Set(data[DISABLED_HOSTS_KEY] || []);
+  if (disabled) list.add(host);
+  else list.delete(host);
+  await chrome.storage.local.set({ [DISABLED_HOSTS_KEY]: [...list] });
+}
+
+export async function getDisabledHosts() {
+  const data = await chrome.storage.local.get(DISABLED_HOSTS_KEY);
+  return data[DISABLED_HOSTS_KEY] || [];
+}
+
+export async function getWritesEnabled() {
+  const data = await chrome.storage.local.get(WRITES_KEY);
+  // 默认 true（v1.2 之前都是隐式 true，不让升级用户体验断）
+  return data[WRITES_KEY] !== false;
+}
+
+export async function setWritesEnabled(enabled) {
+  await chrome.storage.local.set({ [WRITES_KEY]: !!enabled });
 }

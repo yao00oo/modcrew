@@ -1,8 +1,20 @@
 // Content script: 页面加载时 auto-apply 已保存且 enabled 的 mod
 // run_at: document_start
-// 通过 sw 获取（pattern + enabled 在 sw 那边过滤好）
+//
+// 注入路径：content script (isolated world) 拿到 mod 列表后委托给 sw，
+// 由 sw 调 chrome.scripting.insertCSS / executeScript({world:'MAIN'}) 注入。
+// 走 sw 是为了绕开严格 CSP（'self' / nonce-only 站会拦 inline <script>/<style>）。
 
 (async () => {
+  // Host disable gate：先问 sw 当前 host 是不是关了，是就直接退出
+  try {
+    const gate = await chrome.runtime.sendMessage({
+      type: "is_host_disabled",
+      host: location.hostname,
+    });
+    if (gate?.disabled) return;
+  } catch {}
+
   let mods = [];
   try {
     mods = await chrome.runtime.sendMessage({
@@ -12,24 +24,14 @@
   } catch {
     return;
   }
-  if (!Array.isArray(mods)) return;
+  if (!Array.isArray(mods) || mods.length === 0) return;
 
-  for (const mod of mods) {
-    try {
-      if (mod.type === "css") {
-        const style = document.createElement("style");
-        style.dataset.modcrewId = mod.id;
-        style.textContent = mod.content;
-        (document.head || document.documentElement).appendChild(style);
-      } else if (mod.type === "js") {
-        const script = document.createElement("script");
-        script.dataset.modcrewId = mod.id;
-        script.textContent = mod.content;
-        (document.head || document.documentElement).appendChild(script);
-        script.remove();
-      }
-    } catch (e) {
-      console.warn("[modcrew] apply mod failed:", mod.id, e);
-    }
+  try {
+    await chrome.runtime.sendMessage({
+      type: "apply_persisted_mods",
+      mods,
+    });
+  } catch (e) {
+    console.warn("[modcrew] apply_persisted_mods failed:", e);
   }
 })();

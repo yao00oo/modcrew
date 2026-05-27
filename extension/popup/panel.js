@@ -11,8 +11,18 @@ const modalTitle = document.getElementById("modal-title");
 const modalContent = document.getElementById("modal-content");
 const modalClose = document.getElementById("modal-close");
 
+const siteToggle = document.getElementById("siteToggle");
+const siteToggleHost = document.getElementById("siteToggleHost");
+const writesToggle = document.getElementById("writesToggle");
+const openActivityBtn = document.getElementById("openActivityBtn");
+const activityModal = document.getElementById("activity-modal");
+const activityList = document.getElementById("activity-list");
+const activityClose = document.getElementById("activity-close");
+const activityClear = document.getElementById("activity-clear");
+
 let currentCmd = "";
 let currentDomain = null;
+let currentHostForToggle = null;
 let allMods = [];
 let filter = "current";
 let autoSyncTriggered = false;
@@ -35,19 +45,14 @@ async function refreshStatus() {
     statusEl.className = "status disconnected";
   }
 
-  // unverified = 首装/重装后 SW 生成了一个候选 token，但还没经过 modcrew.dev 的 localStorage
-  // 对帐。这时 popup 不显示命令（避免用户拿到错的 token 去配 Claude Code），
-  // 而是引导用户访问 modcrew.dev/install 触发同步。
   if (resp?.unverified) {
     currentCmd = "";
-    // 自动后台开 modcrew.dev tab 触发 content script sync。
-    // popup 这边继续 2 秒轮询，unverified 翻成 false 后自动显示真命令。
     if (!autoSyncTriggered) {
       autoSyncTriggered = true;
       try {
         await chrome.tabs.create({
           url: "https://modcrew.dev/install",
-          active: false, // 后台 tab，不抢焦点
+          active: false,
         });
       } catch (e) {
         console.warn("[modcrew] auto-sync failed to open tab:", e);
@@ -72,6 +77,23 @@ async function refreshStatus() {
       `<a href="${u.url}" target="_blank">What's new</a>`;
   } else {
     updateBanner.style.display = "none";
+  }
+
+  // Site toggle: 反映当前 tab host
+  currentHostForToggle = resp?.currentHost || null;
+  if (currentHostForToggle) {
+    siteToggleHost.textContent = currentHostForToggle;
+    siteToggleHost.title = currentHostForToggle;
+    siteToggle.checked = !resp.currentHostDisabled; // checked = 启用
+    siteToggle.disabled = false;
+  } else {
+    siteToggleHost.textContent = "Site";
+    siteToggle.disabled = true;
+  }
+
+  // Writes toggle
+  if (typeof resp?.writesEnabled === "boolean") {
+    writesToggle.checked = resp.writesEnabled;
   }
 }
 
@@ -219,7 +241,75 @@ modal.addEventListener("click", (e) => {
   if (e.target === modal) modal.style.display = "none";
 });
 
+// === Site toggle ===
+siteToggle.addEventListener("change", async () => {
+  if (!currentHostForToggle) return;
+  const disabled = !siteToggle.checked;
+  await chrome.runtime.sendMessage({
+    type: "set_host_disabled",
+    host: currentHostForToggle,
+    disabled,
+  });
+});
+
+// === Writes toggle ===
+writesToggle.addEventListener("change", async () => {
+  await chrome.runtime.sendMessage({
+    type: "set_writes_enabled",
+    enabled: writesToggle.checked,
+  });
+});
+
+// === Activity modal ===
+function fmtTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleString();
+}
+
+function fmtMs(ms) {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+async function renderActivity() {
+  const entries = await chrome.runtime.sendMessage({ type: "get_audit", limit: 50 });
+  if (!Array.isArray(entries) || !entries.length) {
+    activityList.innerHTML = '<li class="empty">No MCP activity yet.</li>';
+    return;
+  }
+  activityList.innerHTML = "";
+  for (const e of entries) {
+    const li = document.createElement("li");
+    li.className = "activity-row " + (e.ok ? "ok" : "fail");
+    li.innerHTML = `
+      <div class="activity-head">
+        <span class="activity-method">${escapeHtml(e.method || e.tool || "?")}</span>
+        <span class="activity-time">${escapeHtml(fmtTime(e.timestamp))}</span>
+      </div>
+      <div class="activity-meta">
+        <span class="activity-args">${escapeHtml(e.args || "")}</span>
+        ${e.error ? `<span class="activity-err">${escapeHtml(e.error)}</span>` : ""}
+        <span class="activity-dur">${fmtMs(e.durationMs ?? 0)}</span>
+      </div>
+    `;
+    activityList.appendChild(li);
+  }
+}
+
+openActivityBtn.onclick = async () => {
+  activityModal.style.display = "flex";
+  await renderActivity();
+};
+activityClose.onclick = () => (activityModal.style.display = "none");
+activityModal.addEventListener("click", (e) => {
+  if (e.target === activityModal) activityModal.style.display = "none";
+});
+activityClear.onclick = async () => {
+  if (!confirm("Clear all MCP activity history?")) return;
+  await chrome.runtime.sendMessage({ type: "clear_audit" });
+  await renderActivity();
+};
+
 refreshStatus();
 loadMods();
 setInterval(refreshStatus, 2000);
-// 每次打开 popup 刷新一次 mods（不轮询，避免 spam）

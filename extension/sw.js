@@ -13,6 +13,14 @@ import {
   getAllMods,
   toggleMod,
   deleteMod,
+  appendAudit,
+  getRecentAudit,
+  clearAudit,
+  isHostDisabled,
+  setHostDisabled,
+  getDisabledHosts,
+  getWritesEnabled,
+  setWritesEnabled,
 } from "./shared/storage.js";
 import { getApiBase, wsUrl } from "./shared/config.js";
 import { maybeCheck as maybeCheckUpdate } from "./shared/update-check.js";
@@ -22,6 +30,7 @@ import { handleSnapshot } from "./shared/handlers/snapshot.js";
 import { handleFindElement } from "./shared/handlers/find-element.js";
 import { handleInjectCss } from "./shared/handlers/inject-css.js";
 import { handleInjectJs } from "./shared/handlers/inject-js.js";
+import { handleFetch } from "./shared/handlers/fetch.js";
 import { handleScreenshot } from "./shared/handlers/screenshot.js";
 import { handleListTabs } from "./shared/handlers/list-tabs.js";
 import { handleListMods } from "./shared/handlers/list-mods.js";
@@ -249,53 +258,179 @@ async function resolveTabId(maybeTabId) {
   return tabs[0]?.id;
 }
 
-async function handleModcrewApiCall(method, args) {
-  switch (method) {
-    case "snapshot":
-      return handleSnapshot(await resolveTabId(args[0]));
-    case "findElement":
-      return handleFindElement(await resolveTabId(args[1]), args[0]);
-    case "injectCss": {
-      const [css, opts = {}] = args;
-      return handleInjectCss(
-        await resolveTabId(opts.tabId),
-        css,
-        opts.urlPattern,
-        opts.intent
-      );
-    }
-    case "injectJs": {
-      const [code, opts = {}] = args;
-      return handleInjectJs(
-        await resolveTabId(opts.tabId),
-        code,
-        opts.urlPattern,
-        opts.intent
-      );
-    }
-    case "screenshot":
-      return handleScreenshot(await resolveTabId(args[0]));
-    case "listTabs":
-      return handleListTabs();
-    case "listMods":
-      return handleListMods(args[0]);
-    case "toggleMod":
-      return handleToggleMod(args[0], args[1]);
-    case "deleteMod":
-      return handleDeleteMod(args[0]);
-    case "saveMod": {
-      const mod = args[0] || {};
-      return handleSaveMod(
-        await resolveTabId(mod.tabId),
-        mod.intent,
-        mod.content,
-        mod.contentType,
-        mod.urlPattern
-      );
-    }
-    default:
-      throw new Error(`Unknown modcrew API method: ${method}`);
+// READ-tier: 不改东西，只读。
+// WRITE-tier: 改 DOM / 改 mod 库。可被「Allow AI to change pages」总开关关掉。
+const READ_METHODS = new Set([
+  "snapshot",
+  "findElement",
+  "screenshot",
+  "listTabs",
+  "listMods",
+  "fetch",
+]);
+const WRITE_METHODS = new Set([
+  "injectCss",
+  "injectJs",
+  "saveMod",
+  "toggleMod",
+  "deleteMod",
+]);
+
+async function getTabHostname(tabId) {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    return new URL(tab.url).hostname;
+  } catch {
+    return null;
   }
+}
+
+function summarizeArgs(method, args) {
+  // 给 audit log 用，截断长内容
+  try {
+    if (method === "injectCss" || method === "injectJs") {
+      const [src, opts = {}] = args;
+      const sz = (src || "").length;
+      const pat = opts.urlPattern || "(domain default)";
+      return `${sz}B → ${pat}${opts.intent ? ` · "${opts.intent}"` : ""}`;
+    }
+    if (method === "saveMod") {
+      const m = args[0] || {};
+      return `${m.contentType || "?"} → ${m.urlPattern || "?"}`;
+    }
+    if (method === "deleteMod" || method === "toggleMod") return `id=${args[0]}`;
+    if (method === "findElement") return `intent="${(args[0] || "").slice(0, 40)}"`;
+    if (method === "fetch") return `${(args[1]?.method || "GET")} ${args[0]}`;
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+async function handleModcrewApiCall(method, args) {
+  const start = Date.now();
+
+  // 1) WRITE permission gate
+  if (WRITE_METHODS.has(method)) {
+    const writesOk = await getWritesEnabled();
+    if (!writesOk) {
+      const err = `modcrew: "Allow AI to change pages" is disabled. Enable it in the extension popup before using ${method}().`;
+      await appendAudit({
+        tool: "modcrew_execute",
+        method,
+        args: summarizeArgs(method, args),
+        ok: false,
+        error: err,
+        durationMs: Date.now() - start,
+      }).catch(() => {});
+      throw new Error(err);
+    }
+  }
+
+  // 2) host-disable gate（只挡会写当前 tab 的 method）
+  if (method === "injectCss" || method === "injectJs") {
+    const opts = args[1] || {};
+    const tabId = await resolveTabId(opts.tabId);
+    const host = await getTabHostname(tabId);
+    if (host && (await isHostDisabled(host))) {
+      const err = `modcrew is disabled on ${host}. Toggle "Site" on in the popup to re-enable.`;
+      await appendAudit({
+        tool: "modcrew_execute",
+        method,
+        args: summarizeArgs(method, args),
+        ok: false,
+        error: err,
+        durationMs: Date.now() - start,
+      }).catch(() => {});
+      throw new Error(err);
+    }
+  }
+
+  // 3) 真正分派
+  let result, ok = true, error = null;
+  try {
+    switch (method) {
+      case "snapshot":
+        result = await handleSnapshot(await resolveTabId(args[0]));
+        break;
+      case "findElement":
+        result = await handleFindElement(await resolveTabId(args[1]), args[0]);
+        break;
+      case "injectCss": {
+        const [css, opts = {}] = args;
+        result = await handleInjectCss(
+          await resolveTabId(opts.tabId),
+          css,
+          opts.urlPattern,
+          opts.intent
+        );
+        break;
+      }
+      case "injectJs": {
+        const [code, opts = {}] = args;
+        result = await handleInjectJs(
+          await resolveTabId(opts.tabId),
+          code,
+          opts.urlPattern,
+          opts.intent
+        );
+        break;
+      }
+      case "fetch":
+        result = await handleFetch(args[0], args[1]);
+        break;
+      case "screenshot":
+        result = await handleScreenshot(await resolveTabId(args[0]));
+        break;
+      case "listTabs":
+        result = await handleListTabs();
+        break;
+      case "listMods":
+        result = await handleListMods(args[0]);
+        break;
+      case "toggleMod":
+        result = await handleToggleMod(args[0], args[1]);
+        break;
+      case "deleteMod":
+        result = await handleDeleteMod(args[0]);
+        break;
+      case "saveMod": {
+        const mod = args[0] || {};
+        result = await handleSaveMod(
+          await resolveTabId(mod.tabId),
+          mod.intent,
+          mod.content,
+          mod.contentType,
+          mod.urlPattern
+        );
+        break;
+      }
+      default:
+        throw new Error(`Unknown modcrew API method: ${method}`);
+    }
+  } catch (e) {
+    ok = false;
+    error = e?.message ?? String(e);
+    await appendAudit({
+      tool: "modcrew_execute",
+      method,
+      args: summarizeArgs(method, args),
+      ok: false,
+      error,
+      durationMs: Date.now() - start,
+    }).catch(() => {});
+    throw e;
+  }
+
+  await appendAudit({
+    tool: "modcrew_execute",
+    method,
+    args: summarizeArgs(method, args),
+    ok: true,
+    error: null,
+    durationMs: Date.now() - start,
+  }).catch(() => {});
+  return result;
 }
 
 // 内部消息（popup / content script / offscreen）
@@ -325,15 +460,44 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         "modcrew_token_unverified",
       ]);
       const base = await getApiBase();
+      // 顺手把 popup 要的开关状态 + 当前 tab host 一并打包
+      const writesEnabled = await getWritesEnabled();
+      let currentHost = null,
+        currentHostDisabled = false;
+      try {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (activeTab?.url) {
+          currentHost = new URL(activeTab.url).hostname;
+          currentHostDisabled = await isHostDisabled(currentHost);
+        }
+      } catch {}
       sendResponse({
         connected: ws && ws.readyState === WebSocket.OPEN,
         token: currentToken,
         mcpUrl: currentToken ? `${base}/mcp/${currentToken}` : null,
         apiBase: base,
         unverified: modcrew_token_unverified === true,
+        writesEnabled,
+        currentHost,
+        currentHostDisabled,
         update: updateInfo || null,
         version: chrome.runtime.getManifest().version,
       });
+    } else if (msg.type === "is_host_disabled") {
+      const disabled = await isHostDisabled(msg.host);
+      sendResponse({ disabled });
+    } else if (msg.type === "set_host_disabled") {
+      await setHostDisabled(msg.host, msg.disabled);
+      sendResponse({ ok: true });
+    } else if (msg.type === "set_writes_enabled") {
+      await setWritesEnabled(msg.enabled);
+      sendResponse({ ok: true });
+    } else if (msg.type === "get_audit") {
+      const entries = await getRecentAudit(msg.limit || 50);
+      sendResponse(entries);
+    } else if (msg.type === "clear_audit") {
+      await clearAudit();
+      sendResponse({ ok: true });
     } else if (msg.type === "regenerate_token") {
       const fresh = await regenerateToken();
       const base = await getApiBase();
@@ -355,6 +519,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       sendResponse({ ok: true });
     } else if (msg.type === "set_api_base") {
       await chrome.storage.local.set({ apiBase: msg.apiBase });
+      sendResponse({ ok: true });
+    } else if (msg.type === "apply_persisted_mods") {
+      // content/auto-apply.js 调进来：用 chrome.scripting 重注 mod，绕开页面 CSP
+      const tabId = _sender.tab?.id;
+      if (!tabId) {
+        sendResponse({ ok: false, error: "no tab id from sender" });
+        return;
+      }
+      for (const mod of msg.mods) {
+        try {
+          if (mod.type === "css") {
+            await chrome.scripting.insertCSS({ target: { tabId }, css: mod.content });
+          } else if (mod.type === "js") {
+            const wrapped = `(async()=>{try{${mod.content}}catch(e){console.error('[modcrew] mod ${mod.id} error:',e)}})()`;
+            await chrome.scripting.executeScript({
+              target: { tabId },
+              func: new Function(wrapped),
+              world: "MAIN",
+              injectImmediately: true,
+            });
+          }
+        } catch (e) {
+          console.warn("[modcrew] apply mod failed:", mod.id, e);
+        }
+      }
       sendResponse({ ok: true });
     }
   })();

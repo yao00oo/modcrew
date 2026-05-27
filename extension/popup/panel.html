@@ -8,7 +8,14 @@
   <body>
     <header>
       <h1>ModCrew</h1>
-      <div id="status" class="status disconnected">●</div>
+      <div class="header-right">
+        <label class="site-toggle" id="siteToggleWrap" title="Disable all mods on this site">
+          <span class="site-toggle-label" id="siteToggleHost">Site</span>
+          <input type="checkbox" id="siteToggle" checked />
+          <span class="site-toggle-slider"></span>
+        </label>
+        <div id="status" class="status disconnected">●</div>
+      </div>
     </header>
 
     <section class="setup">
@@ -23,6 +30,15 @@
     </section>
 
     <section id="update-banner" class="update-banner" style="display:none"></section>
+
+    <section class="perm-row">
+      <label class="perm-toggle">
+        <input type="checkbox" id="writesToggle" checked />
+        <span class="perm-toggle-slider"></span>
+        <span class="perm-toggle-text">Allow AI to change pages</span>
+      </label>
+      <button class="link-btn perm-aux" id="openActivityBtn">Activity</button>
+    </section>
 
     <section class="library">
       <div class="lib-header">
@@ -49,6 +65,20 @@
           <button id="modal-close" class="link-btn">×</button>
         </div>
         <pre id="modal-content"></pre>
+      </div>
+    </div>
+
+    <!-- Activity (MCP audit log) modal -->
+    <div id="activity-modal" class="modal" style="display:none">
+      <div class="modal-body activity-body">
+        <div class="modal-header">
+          <span>Recent MCP activity</span>
+          <div>
+            <button id="activity-clear" class="link-btn">Clear</button>
+            <button id="activity-close" class="link-btn" style="margin-left:8px">×</button>
+          </div>
+        </div>
+        <ul id="activity-list" class="activity-list"></ul>
       </div>
     </div>
 

@@ -57,6 +57,28 @@ Returns a data URL of the visible viewport. Use after injecting to verify.
 const shot = await modcrew.screenshot();
 \`\`\`
 
+### modcrew.fetch(url, opts?)
+Cross-origin HTTP from inside a mod. Runs in the service worker, so the page's \`connect-src\` CSP doesn't apply. Equivalent in spirit to Tampermonkey's \`GM_xmlhttpRequest\`.
+
+- \`url\` (string, required)
+- \`opts\` (object, optional):
+  - \`method\` (string, default \`'GET'\`)
+  - \`headers\` (object)
+  - \`body\` (string)
+  - \`responseType\` — \`'text'\` (default) | \`'json'\` | \`'data-url'\` | \`'array'\`
+    - \`'data-url'\`: returns a \`data:<mime>;base64,...\` string. Use this when you need to feed an external asset into a CSP-restricted page (\`<img src>\`, \`<iframe src>\`, etc.) — the data URL is allowed even when \`connect-src 'self'\` would block a direct fetch from the page.
+
+Returns \`{status, statusText, ok, headers, body, url}\`.
+
+\`\`\`js
+// JSON
+const { body } = await modcrew.fetch('https://api.example.com/x', { responseType: 'json' });
+
+// 拉外部图片直接当 <img src> — 绕 connect-src 'self'
+const img = await modcrew.fetch('https://cdn.example.com/a.png', { responseType: 'data-url' });
+document.querySelector('#avatar').src = img.body;
+\`\`\`
+
 ### modcrew.listTabs()
 Returns \`[{tabId, url, title, active, windowId}]\` for all the user's open tabs. Use for cross-tab style transfer.
 
