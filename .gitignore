@@ -21,3 +21,4 @@ extension/modcrew.pem
 .env
 .env.local
 keys/
+modcrew-extension-*.zip
