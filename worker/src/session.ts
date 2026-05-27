@@ -114,9 +114,16 @@ export class ModCrewSession {
   }
 
   async callExtension(tool: string, args: any): Promise<any> {
+    // MV3 SW 可能正在 sleep (alarm 30s 间隔)，等它醒过来重连 ws，最多等 8s
+    if (!this.extensionWs || this.extensionWs.readyState !== 1) {
+      for (let i = 0; i < 16; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        if (this.extensionWs && this.extensionWs.readyState === 1) break;
+      }
+    }
     if (!this.extensionWs || this.extensionWs.readyState !== 1) {
       throw new Error(
-        "Modcrew extension not connected. Pair it at https://modcrew.dev/install"
+        "Modcrew extension not connected. Open Chrome (extension SW may be sleeping) and retry — or pair at https://modcrew.dev/install if you removed the extension."
       );
     }
     const id = crypto.randomUUID();
@@ -163,7 +170,7 @@ export class ModCrewSession {
         result = {
           protocolVersion: "2025-03-26",
           capabilities: { tools: {} },
-          serverInfo: { name: "modcrew", version: "1.1.1" },
+          serverInfo: { name: "modcrew", version: "1.1.2" },
         };
       } else if (method === "notifications/initialized") {
         return new Response(null, { status: 204 }); // notification, no response

@@ -54,13 +54,13 @@ async function ensureToken() {
 
 async function regenerateToken() {
   const fresh = crypto.randomUUID();
-  // 明确用户意图：直接 verified，下次 content script 同步会把 localStorage 也更新
   await chrome.storage.local.set({
     modcrew_token: fresh,
     modcrew_token_unverified: false,
   });
   if (ws) {
     try { ws.close(); } catch {}
+    ws = null;
   }
   reconnectDelay = 1000;
   connect();
@@ -80,6 +80,8 @@ async function regenerateToken() {
 //   uv=false, localTok ≠ swTok          → 用户主动 regenerate 过：swTok 是权威，覆盖 localStorage
 //   uv=false, localTok = swTok          → 稳态：noop
 async function handleSyncTokenFromPage(localTok) {
+  // 等 ensureToken 把初始 token 写进 storage —— 之前没 await，会有 race
+  await ensureToken();
   const data = await chrome.storage.local.get([
     "modcrew_token",
     "modcrew_token_unverified",
@@ -87,7 +89,7 @@ async function handleSyncTokenFromPage(localTok) {
   const swTok = data.modcrew_token;
   const uv = data.modcrew_token_unverified === true;
 
-  if (!swTok) return { action: "noop" }; // 不应该发生（ensureToken 已运行）
+  if (!swTok) return { action: "noop" };
 
   // 恢复场景
   if (uv && localTok && localTok !== swTok) {
@@ -98,6 +100,7 @@ async function handleSyncTokenFromPage(localTok) {
     currentToken = localTok;
     if (ws) {
       try { ws.close(); } catch {}
+      ws = null; // 关键：同步置空，下面 connect() 才不会跟旧 ws 撞
     }
     reconnectDelay = 1000;
     connect();
@@ -119,37 +122,49 @@ async function handleSyncTokenFromPage(localTok) {
 }
 
 async function connect() {
-  const token = await ensureToken();
+  await ensureToken();
+  // 总是从 storage 读最新值（不依赖 ensureToken 的返回，sync 可能刚刚改写了）
+  const data = await chrome.storage.local.get("modcrew_token");
+  const token = data.modcrew_token;
+  if (!token) return;
   currentToken = token;
   const base = await getApiBase();
   const url = wsUrl(base, token);
 
+  let localWs;
   try {
-    ws = new WebSocket(url);
+    localWs = new WebSocket(url);
   } catch (e) {
     console.warn("[modcrew] ws connect failed:", e);
     scheduleReconnect();
     return;
   }
+  ws = localWs;
 
-  ws.addEventListener("open", () => {
+  localWs.addEventListener("open", () => {
+    if (ws !== localWs) return; // 已经被新连接顶掉了
     console.log("[modcrew] connected to", base);
     reconnectDelay = 1000;
     startKeepalive();
   });
 
-  ws.addEventListener("close", () => {
+  localWs.addEventListener("close", () => {
+    if (ws !== localWs) {
+      // 旧 ws 的 close 异步触发，但全局 ws 已经是新的了 — 不要干掉新 ws
+      return;
+    }
     console.log("[modcrew] disconnected");
     ws = null;
     stopKeepalive();
     scheduleReconnect();
   });
 
-  ws.addEventListener("error", (e) => {
+  localWs.addEventListener("error", (e) => {
     console.warn("[modcrew] ws error:", e);
   });
 
-  ws.addEventListener("message", async (ev) => {
+  localWs.addEventListener("message", async (ev) => {
+    if (ws !== localWs) return; // 旧 ws 的残留消息
     let msg;
     try {
       msg = JSON.parse(ev.data);
