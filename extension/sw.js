@@ -21,6 +21,9 @@ import {
   getDisabledHosts,
   getWritesEnabled,
   setWritesEnabled,
+  setLastPicked,
+  getLastPicked,
+  clearLastPicked,
 } from "./shared/storage.js";
 import { getApiBase, wsUrl } from "./shared/config.js";
 import { maybeCheck as maybeCheckUpdate } from "./shared/update-check.js";
@@ -37,6 +40,16 @@ import { handleListMods } from "./shared/handlers/list-mods.js";
 import { handleToggleMod } from "./shared/handlers/toggle-mod.js";
 import { handleDeleteMod } from "./shared/handlers/delete-mod.js";
 import { handleSaveMod } from "./shared/handlers/save-mod.js";
+import { handleClick } from "./shared/handlers/click.js";
+import { handleFill } from "./shared/handlers/fill.js";
+import { handleHover } from "./shared/handlers/hover.js";
+import { handleWaitFor } from "./shared/handlers/wait-for.js";
+import {
+  handleGetValue,
+  handleSetValue,
+  handleDeleteValue,
+  handleListValues,
+} from "./shared/handlers/kv.js";
 
 const KEEPALIVE_MS = 20_000;
 
@@ -267,6 +280,10 @@ const READ_METHODS = new Set([
   "listTabs",
   "listMods",
   "fetch",
+  "waitFor",
+  "getValue",
+  "listValues",
+  "getLastPicked",
 ]);
 const WRITE_METHODS = new Set([
   "injectCss",
@@ -274,6 +291,11 @@ const WRITE_METHODS = new Set([
   "saveMod",
   "toggleMod",
   "deleteMod",
+  "click",
+  "fill",
+  "hover",
+  "setValue",
+  "deleteValue",
 ]);
 
 async function getTabHostname(tabId) {
@@ -301,6 +323,11 @@ function summarizeArgs(method, args) {
     if (method === "deleteMod" || method === "toggleMod") return `id=${args[0]}`;
     if (method === "findElement") return `intent="${(args[0] || "").slice(0, 40)}"`;
     if (method === "fetch") return `${(args[1]?.method || "GET")} ${args[0]}`;
+    if (method === "click" || method === "hover" || method === "waitFor") return args[0] || "";
+    if (method === "fill") return `${args[0]} ← ${(args[1] || "").slice(0, 24)}`;
+    if (method === "getValue" || method === "setValue" || method === "deleteValue")
+      return `key=${args[0]}`;
+    if (method === "listValues") return args[0] ? `prefix=${args[0]}` : "(all)";
     return "";
   } catch {
     return "";
@@ -405,6 +432,33 @@ async function handleModcrewApiCall(method, args) {
         );
         break;
       }
+      case "click":
+        result = await handleClick(await resolveTabId(args[1]), args[0]);
+        break;
+      case "fill":
+        result = await handleFill(await resolveTabId(args[2]), args[0], args[1]);
+        break;
+      case "hover":
+        result = await handleHover(await resolveTabId(args[1]), args[0]);
+        break;
+      case "waitFor":
+        result = await handleWaitFor(await resolveTabId(args[2]), args[0], args[1] || {});
+        break;
+      case "getValue":
+        result = await handleGetValue(args[0], args[1]);
+        break;
+      case "setValue":
+        result = await handleSetValue(args[0], args[1]);
+        break;
+      case "deleteValue":
+        result = await handleDeleteValue(args[0]);
+        break;
+      case "listValues":
+        result = await handleListValues(args[0]);
+        break;
+      case "getLastPicked":
+        result = await getLastPicked();
+        break;
       default:
         throw new Error(`Unknown modcrew API method: ${method}`);
     }
@@ -497,6 +551,35 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       sendResponse(entries);
     } else if (msg.type === "clear_audit") {
       await clearAudit();
+      sendResponse({ ok: true });
+    } else if (msg.type === "start_element_picker") {
+      // 在当前 active tab 注入 picker。popup 会关掉（用户接下来点页面），
+      // picker 选完写 chrome.storage 给 popup 下次开时读。
+      try {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!activeTab?.id) {
+          sendResponse({ ok: false, error: "no active tab" });
+          return;
+        }
+        await chrome.scripting.executeScript({
+          target: { tabId: activeTab.id },
+          files: ["content/element-picker.js"],
+        });
+        sendResponse({ ok: true, tabId: activeTab.id });
+      } catch (e) {
+        sendResponse({ ok: false, error: e?.message ?? String(e) });
+      }
+    } else if (msg.type === "element_picked") {
+      // content/element-picker.js 选完发上来
+      await setLastPicked(msg.info);
+      sendResponse({ ok: true });
+    } else if (msg.type === "element_pick_cancelled") {
+      sendResponse({ ok: true });
+    } else if (msg.type === "get_last_picked") {
+      const info = await getLastPicked();
+      sendResponse(info);
+    } else if (msg.type === "clear_last_picked") {
+      await clearLastPicked();
       sendResponse({ ok: true });
     } else if (msg.type === "regenerate_token") {
       const fresh = await regenerateToken();

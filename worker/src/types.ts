@@ -21,10 +21,22 @@ Quick reference (full docs via modcrew_search):
   modcrew.injectCss(css, opts?)           opts: {tabId, urlPattern, intent}
   modcrew.injectJs(code, opts?)           same opts
   modcrew.screenshot(tabId?)
+  modcrew.fetch(url, opts?)               GET-style cross-origin from SW
   modcrew.listTabs()
   modcrew.listMods(domain?)
   modcrew.toggleMod(id, enabled)
   modcrew.deleteMod(id)
+  // Page interaction (v1.4+)
+  modcrew.click(selector, tabId?)
+  modcrew.fill(selector, value, tabId?)
+  modcrew.hover(selector, tabId?)
+  modcrew.waitFor(selector, opts?)         opts: {timeoutMs=5000, visible=false, tabId}
+  // User intent
+  modcrew.getLastPicked()                  → user-picked element selector (popup "Pick element")
+  // Cross-session memory
+  modcrew.getValue(key, defaultValue?)
+  modcrew.setValue(key, value)
+  modcrew.deleteValue(key) / modcrew.listValues(prefix?)
 
 PERSISTENCE MODEL (read this carefully):
 - Every modcrew.injectCss / injectJs is **saved automatically** (Tweeks model).

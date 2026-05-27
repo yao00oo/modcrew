@@ -105,6 +105,52 @@ await modcrew.toggleMod('1716822437-abc12', false);
 ### modcrew.deleteMod(id)
 Permanently delete a saved mod.
 
+### Page interaction
+
+#### modcrew.click(selector, tabId?)
+Click an element. Dispatches mousedown/mouseup/click so React/Vue handlers fire.
+
+\`\`\`js
+await modcrew.click('button[aria-label="Subscribe"]');
+\`\`\`
+
+#### modcrew.fill(selector, value, tabId?)
+Fill an input / textarea / contenteditable. Uses the native value setter so framework-controlled inputs (React, etc.) update correctly. Dispatches \`input\` and \`change\` events.
+
+\`\`\`js
+await modcrew.fill('input[name="email"]', 'a@b.com');
+\`\`\`
+
+#### modcrew.hover(selector, tabId?)
+Trigger \`mouseover/mouseenter/mousemove\` — useful for revealing hover-only menus.
+
+#### modcrew.waitFor(selector, opts?)
+Poll until the element exists (default) or is visible. Default timeout 5000ms (max 30000).
+- \`opts.timeoutMs\` (number)
+- \`opts.visible\` (boolean) — also require width>0, height>0, visibility !== "hidden"
+- \`opts.tabId\` (number)
+
+\`\`\`js
+await modcrew.waitFor('.search-results', { timeoutMs: 8000, visible: true });
+\`\`\`
+
+### Element picker / user intent
+
+#### modcrew.getLastPicked()
+Returns the last element the **user** picked via the popup's "Pick element" button: \`{selector, tag, classes, text, rect, url, pickedAt}\`. Use this when the user says "this button" / "that thing I clicked" — they likely picked it first. If nothing was picked, returns \`null\`.
+
+### Cross-session memory
+
+#### modcrew.getValue(key, defaultValue?)  / modcrew.setValue(key, value) / modcrew.deleteValue(key) / modcrew.listValues(prefix?)
+Per-extension KV store backed by IndexedDB. Value can be any JSON-serializable thing. Use it to remember things across Claude Code sessions — user preferences for a site, previous snapshot conclusions, selectors you identified before.
+
+\`\`\`js
+const prev = await modcrew.getValue('youtube:lastDarkCss');
+if (prev) await modcrew.injectCss(prev);
+
+await modcrew.setValue('youtube:lastDarkCss', generatedCss);
+\`\`\`
+
 ### modcrew.saveMod({intent, content, contentType, urlPattern, tabId?})
 Save a mod with a custom urlPattern (different from current page). Most of the time you don't need this — \`injectCss\`/\`injectJs\` already persist.
 

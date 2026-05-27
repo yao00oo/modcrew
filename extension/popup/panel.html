@@ -37,7 +37,20 @@
         <span class="perm-toggle-slider"></span>
         <span class="perm-toggle-text">Allow AI to change pages</span>
       </label>
-      <button class="link-btn perm-aux" id="openActivityBtn">Activity</button>
+      <div class="perm-actions">
+        <button class="link-btn perm-aux" id="pickElementBtn" title="Click an element on the page; selector will be available to the AI">Pick element</button>
+        <button class="link-btn perm-aux" id="openActivityBtn">Activity</button>
+      </div>
+    </section>
+
+    <section id="picked-card" class="picked-card" style="display:none">
+      <div class="picked-label">Last picked element</div>
+      <code id="picked-selector"></code>
+      <div class="picked-meta">
+        <span id="picked-tag"></span> · <span id="picked-when"></span>
+        <button class="link-btn" id="picked-copy">Copy</button>
+        <button class="link-btn" id="picked-clear">Clear</button>
+      </div>
     </section>
 
     <section class="library">

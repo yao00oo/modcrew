@@ -114,7 +114,45 @@ h1 { font-size: 18px; margin: 0; color: #7c3aed; flex-shrink: 0; }
 }
 .perm-toggle input:checked + .perm-toggle-slider { background: #7c3aed; }
 .perm-toggle input:checked + .perm-toggle-slider::after { transform: translateX(12px); }
+.perm-actions { display: flex; gap: 12px; }
 .perm-aux { font-size: 11px; }
+
+.picked-card {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: #faf5ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.picked-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7c3aed;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+#picked-selector {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #1a1a1a;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  padding: 6px 8px;
+  border-radius: 4px;
+  word-break: break-all;
+  margin-bottom: 6px;
+}
+.picked-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 10px;
+  color: #888;
+}
+.picked-meta button { font-size: 10px; margin-left: auto; }
 
 .setup {
   margin-bottom: 14px;

@@ -5,7 +5,7 @@
 //            ok, error, durationMs }
 
 const DB_NAME = "modcrew";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const AUDIT_KEEP = 200;
 let dbPromise = null;
 
@@ -39,6 +39,9 @@ export function openDB() {
           autoIncrement: true,
         });
         audit.createIndex("timestamp", "timestamp", { unique: false });
+      }
+      if (oldV < 4 && !db.objectStoreNames.contains("kv")) {
+        db.createObjectStore("kv", { keyPath: "key" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -240,4 +243,21 @@ export async function getWritesEnabled() {
 
 export async function setWritesEnabled(enabled) {
   await chrome.storage.local.set({ [WRITES_KEY]: !!enabled });
+}
+
+// === Last picked element (from visual picker → popup display + LLM read) ===
+
+const PICKED_KEY = "modcrew_last_picked";
+
+export async function setLastPicked(info) {
+  await chrome.storage.local.set({ [PICKED_KEY]: { ...info, pickedAt: Date.now() } });
+}
+
+export async function getLastPicked() {
+  const data = await chrome.storage.local.get(PICKED_KEY);
+  return data[PICKED_KEY] || null;
+}
+
+export async function clearLastPicked() {
+  await chrome.storage.local.remove(PICKED_KEY);
 }

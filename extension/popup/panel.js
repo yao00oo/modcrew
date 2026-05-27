@@ -15,6 +15,13 @@ const siteToggle = document.getElementById("siteToggle");
 const siteToggleHost = document.getElementById("siteToggleHost");
 const writesToggle = document.getElementById("writesToggle");
 const openActivityBtn = document.getElementById("openActivityBtn");
+const pickElementBtn = document.getElementById("pickElementBtn");
+const pickedCard = document.getElementById("picked-card");
+const pickedSelector = document.getElementById("picked-selector");
+const pickedTag = document.getElementById("picked-tag");
+const pickedWhen = document.getElementById("picked-when");
+const pickedCopy = document.getElementById("picked-copy");
+const pickedClear = document.getElementById("picked-clear");
 const activityModal = document.getElementById("activity-modal");
 const activityList = document.getElementById("activity-list");
 const activityClose = document.getElementById("activity-close");
@@ -310,6 +317,54 @@ activityClear.onclick = async () => {
   await renderActivity();
 };
 
+// === Pick element ===
+function fmtTimeShort(ts) {
+  const dt = Date.now() - ts;
+  if (dt < 60000) return "just now";
+  if (dt < 3600000) return `${Math.round(dt / 60000)}m ago`;
+  return new Date(ts).toLocaleString();
+}
+
+async function refreshPicked() {
+  const info = await chrome.runtime.sendMessage({ type: "get_last_picked" });
+  if (!info?.selector) {
+    pickedCard.style.display = "none";
+    return;
+  }
+  pickedCard.style.display = "block";
+  pickedSelector.textContent = info.selector;
+  pickedTag.textContent = `<${info.tag}>`;
+  pickedWhen.textContent = fmtTimeShort(info.pickedAt || Date.now());
+}
+
+pickElementBtn.onclick = async () => {
+  const resp = await chrome.runtime.sendMessage({ type: "start_element_picker" });
+  if (!resp?.ok) {
+    alert("Couldn't start picker: " + (resp?.error || "unknown"));
+    return;
+  }
+  // popup 接下来会因用户点页面而关闭。重开 popup 时 refreshPicked 会显示结果。
+  window.close();
+};
+
+pickedCopy.onclick = async () => {
+  const sel = pickedSelector.textContent;
+  if (!sel) return;
+  try {
+    await navigator.clipboard.writeText(sel);
+    pickedCopy.textContent = "✓ Copied";
+    setTimeout(() => (pickedCopy.textContent = "Copy"), 1500);
+  } catch {
+    alert("Copy failed.");
+  }
+};
+
+pickedClear.onclick = async () => {
+  await chrome.runtime.sendMessage({ type: "clear_last_picked" });
+  await refreshPicked();
+};
+
 refreshStatus();
 loadMods();
+refreshPicked();
 setInterval(refreshStatus, 2000);
