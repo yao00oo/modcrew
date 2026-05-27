@@ -14,71 +14,57 @@
       <h1>Install ModCrew</h1>
       <p class="lead">3 steps. About 90 seconds. No app stores, no fees.</p>
 
-      <!-- STEP 1: claude mcp add -->
+      <!-- STEP 1 -->
       <div class="step">
         <div class="step-num">1</div>
         <div class="step-body">
-          <h2>Add ModCrew to Claude Code</h2>
-          <p>Copy this command and paste into <strong>Claude Code</strong>:</p>
-          <div class="code-block">
-            <code id="mcp-cmd">Loading token...</code>
-            <button id="copy-btn">Copy</button>
-          </div>
-          <p class="hint" id="token-hint">Generating your token…</p>
+          <h2>Install the Chrome extension</h2>
+          <ol class="install-steps">
+            <li>
+              <a class="btn-primary btn-small" href="https://github.com/yao00oo/modcrew/releases/latest/download/modcrew-extension-0.4.0.zip" download>Download .zip</a>
+              and unzip it.
+            </li>
+            <li>
+              Open <code>chrome://extensions</code>
+              <button class="btn-mini" onclick="navigator.clipboard.writeText('chrome://extensions'); this.textContent='✓'">Copy</button>
+            </li>
+            <li>Top-right: enable <strong>Developer mode</strong></li>
+            <li>Top-left: click <strong>Load unpacked</strong> → pick the unzipped folder</li>
+          </ol>
+          <p class="hint">
+            The ModCrew icon should appear in your Chrome toolbar.
+            If it's hidden, click the puzzle-piece icon and pin ModCrew.
+          </p>
         </div>
       </div>
 
-      <!-- STEP 2: Install extension (GitHub flow primary) -->
+      <!-- STEP 2 -->
       <div class="step">
         <div class="step-num">2</div>
         <div class="step-body">
-          <h2>Install the Chrome extension</h2>
-          <p>Two ways. Pick whichever feels easier:</p>
-
-          <div class="install-options">
-            <!-- Option A: GitHub Release (primary) -->
-            <div class="option option-primary">
-              <div class="option-badge">⚡ Available now</div>
-              <h3>Quick install (unpacked)</h3>
-              <ol class="install-steps">
-                <li>
-                  <a id="dl-link" class="btn-primary btn-small" href="https://github.com/yao00oo/modcrew/releases/latest/download/modcrew-extension-0.3.0.zip" download>Download .zip</a>
-                </li>
-                <li>Unzip it</li>
-                <li>Open <code>chrome://extensions</code>
-                  <button class="btn-mini" onclick="navigator.clipboard.writeText('chrome://extensions'); this.textContent='✓'">Copy</button>
-                </li>
-                <li>Top-right: enable <strong>Developer mode</strong></li>
-                <li>Top-left: click <strong>Load unpacked</strong> → pick the unzipped folder</li>
-              </ol>
-              <details class="why-safe">
-                <summary>Is this safe?</summary>
-                <p>Yes. ModCrew is open source (<a href="https://github.com/yao00oo/modcrew" target="_blank">github.com/yao00oo/modcrew</a>). The zip contains the exact code you can audit. The extension runs locally — your pages never go to our servers for AI processing (only your own Claude Code session).</p>
-              </details>
-            </div>
-
-            <!-- Option B: Chrome Store (coming) -->
-            <div class="option option-soon">
-              <div class="option-badge">🕓 Coming soon</div>
-              <h3>One-click via Chrome Store</h3>
-              <p class="soon-text">We're in the queue for Chrome Web Store review. Until then, use the unpacked install on the left — it's the exact same extension.</p>
-              <button class="btn-secondary btn-small" disabled>Add to Chrome</button>
-            </div>
+          <h2>Click the ModCrew icon → Copy the command</h2>
+          <p>The popup shows your personal MCP URL. Click <strong>Copy</strong>:</p>
+          <div class="code-block" style="opacity:.85">
+            <code>claude mcp add modcrew --transport http https://api.modcrew.dev/mcp/&lt;your-token&gt;</code>
           </div>
+          <p class="hint">
+            Your token is generated locally by the extension on first run, never by this website.
+            That means: install &amp; uninstall the extension all you want — the URL you copy from
+            the popup is always the source of truth.
+          </p>
         </div>
       </div>
 
-      <!-- STEP 3: Paired -->
+      <!-- STEP 3 -->
       <div class="step">
         <div class="step-num">3</div>
         <div class="step-body">
-          <h2>Paired</h2>
-          <div id="pair-status" class="pair-status pending">
-            <span class="dot"></span>
-            <span id="pair-msg">Waiting for extension…</span>
-          </div>
-          <p class="hint">When you see ✅ Paired, you're ready. Talk to Claude Code:<br />
-            <code>modcrew snapshot the current tab</code></p>
+          <h2>Paste into Claude Code</h2>
+          <p>In any terminal where Claude Code runs, paste the command and hit Enter.</p>
+          <p class="hint">
+            Then just talk to Claude Code:<br />
+            <code>modcrew snapshot the current tab</code> · <code>modcrew make the bg dark</code>
+          </p>
         </div>
       </div>
 
@@ -86,7 +72,5 @@
         <p>Stuck? <a href="https://github.com/yao00oo/modcrew/issues" target="_blank">File an issue</a> · <a href="https://github.com/yao00oo/modcrew" target="_blank">Source on GitHub</a></p>
       </div>
     </main>
-
-    <script src="install.js"></script>
   </body>
 </html>

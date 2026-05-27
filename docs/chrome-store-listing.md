@@ -53,7 +53,6 @@ Build the internet you want to use.
 - `alarms`: Keep service worker alive for WebSocket connection
 - `sidePanel`: Display mod management UI
 - `host_permissions: <all_urls>`: User must be able to mod any site they choose
-- `externally_connectable` (modcrew.dev): Receive pairing token from install page
 
 **Data usage**:
 - We do NOT collect personal data

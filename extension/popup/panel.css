@@ -11,15 +11,62 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 h1 { font-size: 18px; margin: 0; color: #7c3aed; }
-.status { font-size: 12px; font-weight: 600; }
+.status { font-size: 11px; font-weight: 600; }
 .status.connected { color: #0a7; }
+.status.connecting { color: #c80; }
 .status.disconnected { color: #c33; }
-.hint { font-size: 12px; color: #666; margin-bottom: 16px; }
+
+.setup {
+  margin-bottom: 14px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+}
+.setup-label {
+  font-size: 12px;
+  color: #444;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.cmd-box {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.cmd-box code {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  background: #f5f5f7;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  padding: 8px 10px;
+  word-break: break-all;
+  line-height: 1.4;
+  color: #222;
+}
+.cmd-box button {
+  background: #7c3aed;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cmd-box button:hover { background: #6d28d9; }
+.cmd-box button.copied { background: #0a7; }
+.setup-hint { font-size: 11px; color: #888; }
+
 .update-banner {
-  margin-top: 12px;
+  margin-bottom: 14px;
   padding: 8px 12px;
   background: #faf5ff;
   border: 1px solid #7c3aed;
@@ -27,7 +74,9 @@ h1 { font-size: 18px; margin: 0; color: #7c3aed; }
   font-size: 12px;
 }
 .update-banner a { color: #7c3aed; font-weight: 600; }
-h2 { font-size: 13px; color: #666; margin: 16px 0 8px; }
+
+h2 { font-size: 12px; color: #888; margin: 0 0 8px; font-weight: 500; }
+.current-domain { margin-top: 14px; }
 .mods-list { list-style: none; padding: 0; margin: 0; }
 .mods-list li {
   padding: 8px 10px;
@@ -37,6 +86,7 @@ h2 { font-size: 13px; color: #666; margin: 16px 0 8px; }
   font-size: 12px;
   background: #fff;
 }
+.mods-list li.empty { color: #aaa; border-style: dashed; }
 .mods-list li .type-badge {
   display: inline-block;
   font-size: 10px;
@@ -46,14 +96,26 @@ h2 { font-size: 13px; color: #666; margin: 16px 0 8px; }
   margin-right: 6px;
   color: #888;
 }
+
 footer {
-  margin-top: 20px;
-  padding-top: 12px;
+  margin-top: 16px;
+  padding-top: 10px;
   border-top: 1px solid #eee;
   text-align: center;
+  font-size: 11px;
 }
+footer .link-btn {
+  background: none;
+  border: 0;
+  color: #7c3aed;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+}
+footer .link-btn:hover { text-decoration: underline; }
+footer .sep { color: #ccc; margin: 0 6px; }
 footer a {
-  font-size: 12px;
+  font-size: 11px;
   color: #7c3aed;
   text-decoration: none;
 }

@@ -11,10 +11,18 @@
       <div id="status" class="status disconnected">●</div>
     </header>
 
-    <section class="connection-info">
-      <div id="connection-text" class="hint"></div>
-      <div id="update-banner" class="update-banner" style="display:none"></div>
+    <section class="setup">
+      <div class="setup-label">Add to Claude Code — copy this command:</div>
+      <div class="cmd-box">
+        <code id="mcp-cmd">Loading…</code>
+        <button id="copy-btn">Copy</button>
+      </div>
+      <div class="setup-hint" id="setup-hint">
+        Paste in your terminal where Claude Code runs.
+      </div>
     </section>
+
+    <section id="update-banner" class="update-banner" style="display:none"></section>
 
     <section class="current-domain">
       <h2 id="current-domain-name">—</h2>
@@ -22,7 +30,9 @@
     </section>
 
     <footer>
-      <a href="https://modcrew.dev/install" target="_blank">Pair / Reset</a>
+      <button id="regen-btn" class="link-btn">Regenerate token</button>
+      <span class="sep">·</span>
+      <a href="https://modcrew.dev/install" target="_blank">Help</a>
     </footer>
 
     <script type="module" src="panel.js"></script>

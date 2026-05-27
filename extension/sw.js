@@ -1,15 +1,14 @@
 // ModCrew service worker
-// V3 架构：扩展 ↔ Cloudflare Worker（wss://api.modcrew.dev/ws/:token）
+// V3 架构（最终版）：扩展是 token 唯一来源
 //
-// 跟 V2 的区别：
-//   · 不再连 ws://localhost:7788
-//   · 连云端 Worker，token 配对
-//   · externally_connectable：modcrew.dev 安装页可直接发 token 过来
+// 流程：
+//   1. SW 启动 → 读 chrome.storage.modcrew_token
+//      · 无 → crypto.randomUUID() 生成 → 存盘
+//   2. 用 token 连 wss://api.modcrew.dev/ws/<token>
+//   3. popup 从 storage 读 token，显示完整 mcp URL 让用户复制
 //
-// MV3 SW 长连接策略（同 V2，沿用）：
-//   · 20s ping
-//   · chrome.alarms 兜底唤醒
-//   · 每次 SW 启动重建 alarm
+// 不再有：网页 /api/pair、externally_connectable、content script token 握手
+// MV3 长连接：20s ping + chrome.alarms 30s 兜底
 
 import { openDB, getMods, saveMod } from "./shared/storage.js";
 import { getApiBase, wsUrl } from "./shared/config.js";
@@ -28,14 +27,28 @@ let reconnectDelay = 1000;
 let keepaliveTimer = null;
 let currentToken = null;
 
-async function connect() {
-  // 读 token
+async function ensureToken() {
   const data = await chrome.storage.local.get("modcrew_token");
-  const token = data.modcrew_token;
-  if (!token) {
-    console.log("[modcrew] no token yet, waiting for pairing from modcrew.dev/install");
-    return;
+  if (data.modcrew_token) return data.modcrew_token;
+  const fresh = crypto.randomUUID();
+  await chrome.storage.local.set({ modcrew_token: fresh });
+  console.log("[modcrew] generated new token on first run");
+  return fresh;
+}
+
+async function regenerateToken() {
+  const fresh = crypto.randomUUID();
+  await chrome.storage.local.set({ modcrew_token: fresh });
+  if (ws) {
+    try { ws.close(); } catch {}
   }
+  reconnectDelay = 1000;
+  connect();
+  return fresh;
+}
+
+async function connect() {
+  const token = await ensureToken();
   currentToken = token;
   const base = await getApiBase();
   const url = wsUrl(base, token);
@@ -74,7 +87,6 @@ async function connect() {
     }
     if (msg?.type === "pong") return;
 
-    // Worker 推过来 tool call
     if (msg?.type === "call" && msg.id && msg.tool) {
       let response;
       try {
@@ -136,7 +148,7 @@ async function dispatch(tool, args) {
   }
 }
 
-// === alarm 兜底（同 V2 经验）===
+// alarm 兜底
 chrome.alarms.create("modcrew-keepalive", { delayInMinutes: 0.5, periodInMinutes: 0.5 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -153,54 +165,28 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-// === 接收 modcrew.dev/install 网页发来的 token ===
-chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
-  const allowedOrigins = [
-    "https://modcrew.dev",
-    "https://www.modcrew.dev",
-    "http://localhost",
-  ];
-  const ok = allowedOrigins.some((p) => sender.url?.startsWith(p));
-  if (!ok) {
-    sendResponse({ ok: false, error: "untrusted origin" });
-    return;
-  }
-
-  if (msg.type === "pair" && msg.token) {
-    chrome.storage.local.set({ modcrew_token: msg.token }, () => {
-      // 关闭旧连接立即用新 token 重连
-      if (ws) {
-        try { ws.close(); } catch {}
-      }
-      reconnectDelay = 1000;
-      connect();
-      sendResponse({ ok: true });
-    });
-    return true; // async
-  }
-
-  if (msg.type === "ping") {
-    sendResponse({ ok: true, token: currentToken });
-    return;
-  }
-});
-
-// === 内部消息（panel / content script）===
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+// 内部消息（popup）
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
     if (msg.type === "get_status") {
       const { updateInfo } = await chrome.storage.local.get("updateInfo");
+      const base = await getApiBase();
       sendResponse({
         connected: ws && ws.readyState === WebSocket.OPEN,
         token: currentToken,
+        mcpUrl: currentToken ? `${base}/mcp/${currentToken}` : null,
+        apiBase: base,
         update: updateInfo || null,
         version: chrome.runtime.getManifest().version,
       });
+    } else if (msg.type === "regenerate_token") {
+      const fresh = await regenerateToken();
+      const base = await getApiBase();
+      sendResponse({ ok: true, token: fresh, mcpUrl: `${base}/mcp/${fresh}` });
     } else if (msg.type === "get_mods_for_domain") {
       const mods = await getMods(msg.domain);
       sendResponse(mods);
     } else if (msg.type === "set_api_base") {
-      // 给 dev 用
       await chrome.storage.local.set({ apiBase: msg.apiBase });
       sendResponse({ ok: true });
     }
@@ -208,10 +194,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// === 启动 ===
+// 启动
 openDB().then(() => connect());
 
-// 每次 SW 启动检查一次更新（内部 24h 限速）
 maybeCheckUpdate().catch(() => {});
 
 chrome.action.onClicked.addListener(async (tab) => {
