@@ -1,11 +1,8 @@
-// ModCrew service worker
-// V3 架构（最终版）：扩展是 token 唯一来源
+// ModCrew service worker — Code Mode (v1.0)
 //
-// 流程：
-//   1. SW 启动 → 读 chrome.storage.modcrew_token
-//      · 无 → crypto.randomUUID() 生成 → 存盘
-//   2. 用 token 连 wss://api.modcrew.dev/ws/<token>
-//   3. popup 从 storage 读 token，显示完整 mcp URL 让用户复制
+// MCP 工具就 2 个：modcrew_search + modcrew_execute
+// 所有具体能力在 modcrew.* JS API（execute.js 里的 buildModcrewAPI 暴露）
+// 见 docs/mcp-design-principles.md (P1)
 //
 // MV3 长连接：20s ping + chrome.alarms 30s 兜底
 
@@ -19,16 +16,8 @@ import {
 } from "./shared/storage.js";
 import { getApiBase, wsUrl } from "./shared/config.js";
 import { maybeCheck as maybeCheckUpdate } from "./shared/update-check.js";
-import { handleSnapshot } from "./shared/handlers/snapshot.js";
-import { handleFindElement } from "./shared/handlers/find-element.js";
-import { handleInjectCss } from "./shared/handlers/inject-css.js";
-import { handleInjectJs } from "./shared/handlers/inject-js.js";
-import { handleScreenshot } from "./shared/handlers/screenshot.js";
-import { handleSaveMod } from "./shared/handlers/save-mod.js";
-import { handleListTabs } from "./shared/handlers/list-tabs.js";
-import { handleListMods } from "./shared/handlers/list-mods.js";
-import { handleToggleMod } from "./shared/handlers/toggle-mod.js";
-import { handleDeleteMod } from "./shared/handlers/delete-mod.js";
+import { handleExecute } from "./shared/handlers/execute.js";
+import { handleSearch } from "./shared/handlers/search.js";
 
 const KEEPALIVE_MS = 20_000;
 
@@ -135,55 +124,17 @@ function scheduleReconnect() {
   reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
 }
 
-async function resolveTabId(args) {
-  if (args.tabId) return args.tabId;
-  const active = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
-  return active?.id;
-}
-
 async function dispatch(tool, args) {
-  // 不需要 tabId 的工具先处理
-  if (tool === "browser_list_tabs") return handleListTabs();
-  if (tool === "browser_list_mods") return handleListMods(args.domain);
-  if (tool === "browser_toggle_mod") return handleToggleMod(args.id, args.enabled);
-  if (tool === "browser_delete_mod") return handleDeleteMod(args.id);
-
-  const tabId = await resolveTabId(args);
-  if (!tabId) throw new Error("No active tab");
-
   switch (tool) {
-    case "browser_snapshot":
-      return handleSnapshot(tabId);
-    case "browser_find_element":
-      return handleFindElement(tabId, args.intent);
-    case "browser_inject_css":
-      return handleInjectCss(
-        tabId,
-        args.css,
-        args.persist,
-        args.urlPattern,
-        args.intent
-      );
-    case "browser_inject_js":
-      return handleInjectJs(
-        tabId,
-        args.code,
-        args.persist,
-        args.urlPattern,
-        args.intent
-      );
-    case "browser_screenshot":
-      return handleScreenshot(tabId);
-    case "browser_save_mod":
-      return handleSaveMod(
-        tabId,
-        args.intent,
-        args.content,
-        args.contentType,
-        args.urlPattern
-      );
+    case "modcrew_search":
+      return handleSearch(args.query);
+    case "modcrew_execute":
+      return handleExecute(args.code);
     default:
-      throw new Error(`Unknown tool: ${tool}`);
+      throw new Error(
+        `Unknown tool: ${tool}. modcrew v1.0 only exposes modcrew_search + modcrew_execute. ` +
+          `If you're using an older mcp config, run: claude mcp remove modcrew && claude mcp add modcrew --transport http <copy URL from extension popup>`
+      );
   }
 }
 
@@ -223,11 +174,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       const base = await getApiBase();
       sendResponse({ ok: true, token: fresh, mcpUrl: `${base}/mcp/${fresh}` });
     } else if (msg.type === "get_mods_for_url") {
-      // content script auto-apply 调用
       const mods = await getModsMatching(msg.url);
       sendResponse(mods);
     } else if (msg.type === "get_mods_for_domain") {
-      // 兼容老 content script（如有）
       const mods = await getModsForDomain(msg.domain);
       sendResponse(mods.filter((m) => m.enabled !== false));
     } else if (msg.type === "get_all_mods") {
