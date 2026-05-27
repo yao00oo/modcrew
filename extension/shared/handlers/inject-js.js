@@ -1,9 +1,7 @@
 import { saveMod } from "../storage.js";
 
-export async function handleInjectJs(tabId, code, persist) {
-  // V1: 用 chrome.scripting.executeScript 跑（在 ISOLATED world）
-  // 后续可改 chrome.userScripts API 跑 MAIN world 用户脚本
-  const wrapped = `(function(){try{${code}}catch(e){console.error('[modly] script error:',e);return {error:String(e)}}return {ok:true}})()`;
+export async function handleInjectJs(tabId, code, persist, urlPattern, intent) {
+  const wrapped = `(function(){try{${code}}catch(e){console.error('[modcrew] script error:',e);return {error:String(e)}}return {ok:true}})()`;
   let consoleOutput = "";
   try {
     const results = await chrome.scripting.executeScript({
@@ -21,14 +19,16 @@ export async function handleInjectJs(tabId, code, persist) {
   if (shouldPersist) {
     const tab = await chrome.tabs.get(tabId);
     const url = new URL(tab.url);
+    const pattern = urlPattern || `https://${url.hostname}/*`;
     modId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     await saveMod({
       id: modId,
       domain: url.hostname,
-      urlPattern: `https://${url.hostname}/*`,
-      intent: "(inline)",
+      urlPattern: pattern,
+      intent: intent || "(inline)",
       type: "js",
       content: code,
+      enabled: true,
       createdAt: Date.now(),
     });
   }

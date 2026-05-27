@@ -7,10 +7,16 @@
 //   2. 用 token 连 wss://api.modcrew.dev/ws/<token>
 //   3. popup 从 storage 读 token，显示完整 mcp URL 让用户复制
 //
-// 不再有：网页 /api/pair、externally_connectable、content script token 握手
 // MV3 长连接：20s ping + chrome.alarms 30s 兜底
 
-import { openDB, getMods, saveMod } from "./shared/storage.js";
+import {
+  openDB,
+  getModsMatching,
+  getModsForDomain,
+  getAllMods,
+  toggleMod,
+  deleteMod,
+} from "./shared/storage.js";
 import { getApiBase, wsUrl } from "./shared/config.js";
 import { maybeCheck as maybeCheckUpdate } from "./shared/update-check.js";
 import { handleSnapshot } from "./shared/handlers/snapshot.js";
@@ -19,6 +25,10 @@ import { handleInjectCss } from "./shared/handlers/inject-css.js";
 import { handleInjectJs } from "./shared/handlers/inject-js.js";
 import { handleScreenshot } from "./shared/handlers/screenshot.js";
 import { handleSaveMod } from "./shared/handlers/save-mod.js";
+import { handleListTabs } from "./shared/handlers/list-tabs.js";
+import { handleListMods } from "./shared/handlers/list-mods.js";
+import { handleToggleMod } from "./shared/handlers/toggle-mod.js";
+import { handleDeleteMod } from "./shared/handlers/delete-mod.js";
 
 const KEEPALIVE_MS = 20_000;
 
@@ -125,9 +135,20 @@ function scheduleReconnect() {
   reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
 }
 
+async function resolveTabId(args) {
+  if (args.tabId) return args.tabId;
+  const active = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+  return active?.id;
+}
+
 async function dispatch(tool, args) {
-  const tabId =
-    args.tabId ?? (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+  // 不需要 tabId 的工具先处理
+  if (tool === "browser_list_tabs") return handleListTabs();
+  if (tool === "browser_list_mods") return handleListMods(args.domain);
+  if (tool === "browser_toggle_mod") return handleToggleMod(args.id, args.enabled);
+  if (tool === "browser_delete_mod") return handleDeleteMod(args.id);
+
+  const tabId = await resolveTabId(args);
   if (!tabId) throw new Error("No active tab");
 
   switch (tool) {
@@ -136,13 +157,31 @@ async function dispatch(tool, args) {
     case "browser_find_element":
       return handleFindElement(tabId, args.intent);
     case "browser_inject_css":
-      return handleInjectCss(tabId, args.css, args.persist);
+      return handleInjectCss(
+        tabId,
+        args.css,
+        args.persist,
+        args.urlPattern,
+        args.intent
+      );
     case "browser_inject_js":
-      return handleInjectJs(tabId, args.code, args.persist);
+      return handleInjectJs(
+        tabId,
+        args.code,
+        args.persist,
+        args.urlPattern,
+        args.intent
+      );
     case "browser_screenshot":
       return handleScreenshot(tabId);
     case "browser_save_mod":
-      return handleSaveMod(tabId, args.intent, args.content, args.contentType);
+      return handleSaveMod(
+        tabId,
+        args.intent,
+        args.content,
+        args.contentType,
+        args.urlPattern
+      );
     default:
       throw new Error(`Unknown tool: ${tool}`);
   }
@@ -165,7 +204,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-// 内部消息（popup）
+// 内部消息（popup / content script）
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
     if (msg.type === "get_status") {
@@ -183,9 +222,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       const fresh = await regenerateToken();
       const base = await getApiBase();
       sendResponse({ ok: true, token: fresh, mcpUrl: `${base}/mcp/${fresh}` });
-    } else if (msg.type === "get_mods_for_domain") {
-      const mods = await getMods(msg.domain);
+    } else if (msg.type === "get_mods_for_url") {
+      // content script auto-apply 调用
+      const mods = await getModsMatching(msg.url);
       sendResponse(mods);
+    } else if (msg.type === "get_mods_for_domain") {
+      // 兼容老 content script（如有）
+      const mods = await getModsForDomain(msg.domain);
+      sendResponse(mods.filter((m) => m.enabled !== false));
+    } else if (msg.type === "get_all_mods") {
+      const mods = await getAllMods();
+      sendResponse(mods);
+    } else if (msg.type === "toggle_mod") {
+      await toggleMod(msg.id, msg.enabled);
+      sendResponse({ ok: true });
+    } else if (msg.type === "delete_mod") {
+      await deleteMod(msg.id);
+      sendResponse({ ok: true });
     } else if (msg.type === "set_api_base") {
       await chrome.storage.local.set({ apiBase: msg.apiBase });
       sendResponse({ ok: true });

@@ -2,12 +2,19 @@ const statusEl = document.getElementById("status");
 const cmdEl = document.getElementById("mcp-cmd");
 const copyBtn = document.getElementById("copy-btn");
 const setupHint = document.getElementById("setup-hint");
-const domainEl = document.getElementById("current-domain-name");
 const modsListEl = document.getElementById("mods-list");
 const updateBanner = document.getElementById("update-banner");
 const regenBtn = document.getElementById("regen-btn");
+const libTabs = document.querySelectorAll(".lib-tab");
+const modal = document.getElementById("source-modal");
+const modalTitle = document.getElementById("modal-title");
+const modalContent = document.getElementById("modal-content");
+const modalClose = document.getElementById("modal-close");
 
 let currentCmd = "";
+let currentDomain = null;
+let allMods = [];
+let filter = "current";
 
 function buildCmd(mcpUrl) {
   return `claude mcp add modcrew --transport http ${mcpUrl}`;
@@ -44,32 +51,113 @@ async function refreshStatus() {
   }
 }
 
-async function refreshMods() {
+async function loadMods() {
   const tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
-  if (!tab?.url) return;
-  let domain;
   try {
-    domain = new URL(tab.url).hostname;
+    currentDomain = tab?.url ? new URL(tab.url).hostname : null;
   } catch {
-    return;
+    currentDomain = null;
   }
-  domainEl.textContent = domain;
+  allMods = await chrome.runtime.sendMessage({ type: "get_all_mods" });
+  if (!Array.isArray(allMods)) allMods = [];
+  renderMods();
+}
 
-  const mods = await chrome.runtime.sendMessage({
-    type: "get_mods_for_domain",
-    domain,
-  });
+function renderMods() {
+  const filtered =
+    filter === "current" && currentDomain
+      ? allMods.filter((m) => m.domain === currentDomain)
+      : allMods;
+
   modsListEl.innerHTML = "";
-  if (!mods || !mods.length) {
-    modsListEl.innerHTML = '<li class="empty">No mods on this site yet.</li>';
+
+  if (!filtered.length) {
+    const msg =
+      filter === "current"
+        ? `No mods on <b>${currentDomain || "(this page)"}</b> yet. Ask Claude to make one.`
+        : "No mods saved yet.";
+    modsListEl.innerHTML = `<li class="empty">${msg}</li>`;
     return;
   }
-  for (const m of mods) {
+
+  filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  for (const m of filtered) {
     const li = document.createElement("li");
-    li.innerHTML = `<span class="type-badge">${m.type}</span>${m.intent || "(inline)"}`;
+    li.className = "mod-row" + (m.enabled === false ? " disabled" : "");
+    li.innerHTML = `
+      <label class="toggle">
+        <input type="checkbox" data-id="${m.id}" ${m.enabled !== false ? "checked" : ""} />
+      </label>
+      <div class="mod-meta">
+        <div class="mod-line">
+          <span class="type-badge ${m.type}">${m.type}</span>
+          <span class="intent">${escapeHtml(m.intent || "(inline)")}</span>
+        </div>
+        <div class="mod-sub">${escapeHtml(m.urlPattern || m.domain)}</div>
+      </div>
+      <div class="mod-actions">
+        <button class="link-btn view" data-id="${m.id}">View</button>
+        <button class="link-btn delete" data-id="${m.id}">×</button>
+      </div>
+    `;
     modsListEl.appendChild(li);
   }
+
+  modsListEl.querySelectorAll('input[type="checkbox"]').forEach((cb) =>
+    cb.addEventListener("change", async (e) => {
+      const id = e.target.dataset.id;
+      await chrome.runtime.sendMessage({
+        type: "toggle_mod",
+        id,
+        enabled: e.target.checked,
+      });
+      const mod = allMods.find((m) => m.id === id);
+      if (mod) mod.enabled = e.target.checked;
+      renderMods();
+    })
+  );
+
+  modsListEl.querySelectorAll(".view").forEach((b) =>
+    b.addEventListener("click", () => {
+      const mod = allMods.find((m) => m.id === b.dataset.id);
+      if (!mod) return;
+      modalTitle.textContent = `${mod.type} · ${mod.intent || "(inline)"}`;
+      modalContent.textContent = mod.content || "";
+      modal.style.display = "flex";
+    })
+  );
+
+  modsListEl.querySelectorAll(".delete").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const mod = allMods.find((m) => m.id === b.dataset.id);
+      if (!mod) return;
+      if (!confirm(`Delete this ${mod.type} mod?\n\n${mod.intent || "(inline)"}`)) return;
+      await chrome.runtime.sendMessage({ type: "delete_mod", id: mod.id });
+      allMods = allMods.filter((m) => m.id !== mod.id);
+      renderMods();
+    })
+  );
 }
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[c]));
+}
+
+libTabs.forEach((t) =>
+  t.addEventListener("click", () => {
+    libTabs.forEach((x) => x.classList.remove("active"));
+    t.classList.add("active");
+    filter = t.dataset.filter;
+    renderMods();
+  })
+);
 
 copyBtn.onclick = async () => {
   if (!currentCmd) return;
@@ -102,6 +190,12 @@ regenBtn.onclick = async () => {
   }
 };
 
+modalClose.onclick = () => (modal.style.display = "none");
+modal.addEventListener("click", (e) => {
+  if (e.target === modal) modal.style.display = "none";
+});
+
 refreshStatus();
-refreshMods();
+loadMods();
 setInterval(refreshStatus, 2000);
+// 每次打开 popup 刷新一次 mods（不轮询，避免 spam）

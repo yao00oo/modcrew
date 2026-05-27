@@ -12,7 +12,7 @@
     </nav>
     <main>
       <h1>Install ModCrew</h1>
-      <p class="lead">3 steps. About 90 seconds. No app stores, no fees.</p>
+      <p class="lead">Mod the web with your own Claude Code. Free forever — you bring the AI.</p>
 
       <!-- STEP 1 -->
       <div class="step">
@@ -21,7 +21,7 @@
           <h2>Install the Chrome extension</h2>
           <ol class="install-steps">
             <li>
-              <a class="btn-primary btn-small" href="https://github.com/yao00oo/modcrew/releases/latest/download/modcrew-extension-0.4.1.zip" download>Download .zip</a>
+              <a class="btn-primary btn-small" href="https://github.com/yao00oo/modcrew/releases/latest/download/modcrew-extension-0.5.0.zip" download>Download .zip</a>
               and unzip it.
             </li>
             <li>
@@ -48,9 +48,8 @@
             <code>claude mcp add modcrew --transport http https://api.modcrew.dev/mcp/&lt;your-token&gt;</code>
           </div>
           <p class="hint">
-            Your token is generated locally by the extension on first run, never by this website.
-            That means: install &amp; uninstall the extension all you want — the URL you copy from
-            the popup is always the source of truth.
+            Your token is generated locally by the extension on first run — never by this website.
+            The URL in the popup is always the source of truth.
           </p>
         </div>
       </div>
@@ -61,10 +60,52 @@
         <div class="step-body">
           <h2>Paste into Claude Code</h2>
           <p>In any terminal where Claude Code runs, paste the command and hit Enter.</p>
-          <p class="hint">
-            Then just talk to Claude Code:<br />
-            <code>modcrew snapshot the current tab</code> · <code>modcrew make the bg dark</code>
-          </p>
+        </div>
+      </div>
+
+      <h2 class="section-h">What makes ModCrew different</h2>
+
+      <div class="use-cases">
+        <div class="use-case">
+          <div class="uc-tag">Multi-tab</div>
+          <h3>Transfer style between tabs</h3>
+          <p>"Make github.com look like the Vercel dashboard I have open in my other tab."</p>
+          <p class="uc-why">Tweeks generates from a single page. ModCrew's Claude can snapshot one tab, generate CSS, apply to another.</p>
+        </div>
+
+        <div class="use-case">
+          <div class="uc-tag">Your codebase</div>
+          <h3>Use your design system</h3>
+          <p>"Match the colors in <code>~/myproject/tailwind.config.js</code> for this site."</p>
+          <p class="uc-why">Claude Code already reads your filesystem. Browser-only AI extensions can't.</p>
+        </div>
+
+        <div class="use-case">
+          <div class="uc-tag">Multimodal</div>
+          <h3>Style from a screenshot</h3>
+          <p>Drag a PNG into your terminal: <em>"make this page look like the screenshot."</em></p>
+          <p class="uc-why">Claude Opus is multimodal. ModCrew passes the styling through.</p>
+        </div>
+
+        <div class="use-case">
+          <div class="uc-tag">Verifies itself</div>
+          <h3>Self-checking loop</h3>
+          <p>Claude injects CSS, screenshots, sees if it worked, adjusts — all without you having to say "try again."</p>
+          <p class="uc-why">One-shot AI generators can't iterate. Agent-loop tools can.</p>
+        </div>
+
+        <div class="use-case">
+          <div class="uc-tag">$0 forever</div>
+          <h3>You already pay for the AI</h3>
+          <p>You bring your Claude Code subscription. ModCrew doesn't add a tier or charge for LLM tokens. Ever.</p>
+          <p class="uc-why">Other AI extensions sell tiers because they pay for tokens. ModCrew can't burn a cent of your money on AI.</p>
+        </div>
+
+        <div class="use-case">
+          <div class="uc-tag">Composable</div>
+          <h3>Compose with other MCPs</h3>
+          <p>GitHub PR diff → modcrew applies the design ask live. Figma export → modcrew uses the tokens. Linear ticket → modcrew implements the UI.</p>
+          <p class="uc-why">Closed AI extensions can't pull from your other tools. MCP can.</p>
         </div>
       </div>
 

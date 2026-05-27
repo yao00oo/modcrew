@@ -1,11 +1,14 @@
-// Content script: 页面加载时 auto-apply 已保存 mod
+// Content script: 页面加载时 auto-apply 已保存且 enabled 的 mod
 // run_at: document_start
+// 通过 sw 获取（pattern + enabled 在 sw 那边过滤好）
 
 (async () => {
-  const domain = location.hostname;
   let mods = [];
   try {
-    mods = await chrome.runtime.sendMessage({ type: "get_mods_for_domain", domain });
+    mods = await chrome.runtime.sendMessage({
+      type: "get_mods_for_url",
+      url: location.href,
+    });
   } catch {
     return;
   }

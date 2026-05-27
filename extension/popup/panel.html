@@ -24,8 +24,14 @@
 
     <section id="update-banner" class="update-banner" style="display:none"></section>
 
-    <section class="current-domain">
-      <h2 id="current-domain-name">—</h2>
+    <section class="library">
+      <div class="lib-header">
+        <h2>Library</h2>
+        <div class="lib-tabs">
+          <button class="lib-tab active" data-filter="current">This site</button>
+          <button class="lib-tab" data-filter="all">All</button>
+        </div>
+      </div>
       <ul id="mods-list" class="mods-list"></ul>
     </section>
 
@@ -34,6 +40,17 @@
       <span class="sep">·</span>
       <a href="https://modcrew.dev/install" target="_blank">Help</a>
     </footer>
+
+    <!-- Source viewer modal -->
+    <div id="source-modal" class="modal" style="display:none">
+      <div class="modal-body">
+        <div class="modal-header">
+          <span id="modal-title">Source</span>
+          <button id="modal-close" class="link-btn">×</button>
+        </div>
+        <pre id="modal-content"></pre>
+      </div>
+    </div>
 
     <script type="module" src="panel.js"></script>
   </body>
