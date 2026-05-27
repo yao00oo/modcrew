@@ -27,13 +27,14 @@ const match = await modcrew.findElement("the 'Subscribe' button");
 \`\`\`
 
 ### modcrew.injectCss(css, opts?)
-Inject CSS into the page. **Persists by default** — auto-applies on every future visit matching \`urlPattern\`.
+Inject CSS into the page. **ALWAYS saved** — auto-applies on every future visit matching \`urlPattern\`. Following Tweeks' model: every modification is a persistent userscript. To undo: \`modcrew.deleteMod(id)\`. To pause: \`modcrew.toggleMod(id, false)\`.
 - \`css\` (string, required)
 - \`opts\` (object, optional):
   - \`tabId\` (number)
-  - \`persist\` (boolean, default true) — pass false for one-shot
   - \`urlPattern\` (string) — Greasemonkey @match. Examples: \`https://www.youtube.com/watch*\`, \`https://github.com/*\`, \`https://*/*\`. Defaults to current tab's whole domain. **Prefer narrow patterns**.
   - \`intent\` (string) — short label, shows up in the user's Library popup
+
+There is **no** \`persist\` / \`preview\` / \`temporary\` flag. If the user asks for a change, save it. The Library UI is how they manage / undo.
 
 \`\`\`js
 await modcrew.injectCss('body { background: #2563eb }', {
@@ -43,7 +44,7 @@ await modcrew.injectCss('body { background: #2563eb }', {
 \`\`\`
 
 ### modcrew.injectJs(code, opts?)
-Same opts as \`injectCss\`. Runs in MAIN world.
+Same opts as \`injectCss\`. Runs in MAIN world. Same "always saved" semantics — no temporary mode.
 
 \`\`\`js
 await modcrew.injectJs(\`document.title = '🔥 ' + document.title;\`);
@@ -122,15 +123,13 @@ return await modcrew.screenshot(target.tabId);
 ### Iterate until it looks right
 
 \`\`\`js
-let attempt = 0;
-let lastShot;
-while (attempt++ < 3) {
-  await modcrew.injectCss(currentCss, {persist: false});
-  lastShot = await modcrew.screenshot();
-  // (caller inspects lastShot, adjusts CSS, calls execute again)
-  break;
-}
-return lastShot;
+// Each inject is saved. If you iterate, the previous attempts stay until
+// you remove them. Two patterns:
+//   1) Use the SAME urlPattern + intent so duplicates can be cleaned up later
+//   2) Or modcrew.listMods() + modcrew.deleteMod(id) the old attempt first
+await modcrew.injectCss(initialCss, { urlPattern: 'https://example.com/*', intent: 'darken' });
+const shot = await modcrew.screenshot();
+return shot;
 \`\`\`
 
 ## Errors
@@ -140,6 +139,7 @@ If your code throws, the error message + stack trace are returned to you in the 
 ## Anti-patterns
 
 - ❌ Calling \`chrome.*\` directly — use \`modcrew.*\` instead. \`chrome.*\` may be available in scope but it's not part of the API contract and behavior may change.
-- ❌ \`persist: false\` when the user said "make it blue" — they want it to last.
-- ❌ Whole-domain \`urlPattern\` when only some pages are meant — Tweeks-style narrow patterns are preferred.
+- ❌ Looking for a \`persist\` / \`temporary\` / \`preview\` flag — **there isn't one**. Every modcrew.injectCss / injectJs is saved (Tweeks model). User undoes via deleteMod, not by you opting out of saving.
+- ❌ Whole-domain \`urlPattern\` when only some pages are meant — narrow patterns preferred.
+- ❌ Writing CSS without snapshotting first. \`body { background: X !important }\` loses to \`.card { background: white !important }\` (higher specificity). Read the page's actual selectors via snapshot, then override them with same specificity + !important.
 `;

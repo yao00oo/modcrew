@@ -260,7 +260,6 @@ async function handleModcrewApiCall(method, args) {
       return handleInjectCss(
         await resolveTabId(opts.tabId),
         css,
-        opts.persist,
         opts.urlPattern,
         opts.intent
       );
@@ -270,7 +269,6 @@ async function handleModcrewApiCall(method, args) {
       return handleInjectJs(
         await resolveTabId(opts.tabId),
         code,
-        opts.persist,
         opts.urlPattern,
         opts.intent
       );

@@ -18,20 +18,33 @@ const EXECUTE_DESCRIPTION = `Run JavaScript in the user's Chrome via the modcrew
 Quick reference (full docs via modcrew_search):
   modcrew.snapshot(tabId?)
   modcrew.findElement(intent, tabId?)
-  modcrew.injectCss(css, opts?)           opts: {tabId, persist=true, urlPattern, intent}
+  modcrew.injectCss(css, opts?)           opts: {tabId, urlPattern, intent}
   modcrew.injectJs(code, opts?)           same opts
   modcrew.screenshot(tabId?)
   modcrew.listTabs()
   modcrew.listMods(domain?)
   modcrew.toggleMod(id, enabled)
   modcrew.deleteMod(id)
-  modcrew.saveMod({intent, content, contentType, urlPattern, tabId?})
+
+PERSISTENCE MODEL (read this carefully):
+- Every modcrew.injectCss / injectJs is **saved automatically** (Tweeks model).
+- There is **NO** persist / temporary / preview flag. Don't look for one.
+- If the user wants to undo: modcrew.listMods() + modcrew.deleteMod(id).
+- If the user wants to pause: modcrew.toggleMod(id, false).
+- The user can also manage from the extension popup Library.
+
+WRITE STRATEGY (a 30%-vs-99% success-rate difference):
+- ALWAYS call modcrew.snapshot() first before writing any CSS — read the actual class names on the page. Don't guess.
+- Override using selectors copied from the snapshot. \`body { background: X !important }\` LOSES to \`.card { background: white !important }\` because class selectors win on specificity. Reuse the page's own selectors.
+- For "make page X color" intents, the most reliable approach is to enumerate stylesheets + per-rule replacement (Dark Reader's pattern). If filter is acceptable, \`html { filter: hue-rotate(220deg) saturate(1.3) }\` is a one-line escape hatch.
+- After every inject, call modcrew.screenshot() to verify. If wrong, iterate.
 
 Pass your code as the **body of an async function**. Use \`return\` to send a value back. Wrap each modcrew call with \`await\`.
 
-Example — inject and verify in one tool call:
+Example — snapshot, inject, verify in one tool call:
   const snap = await modcrew.snapshot();
-  await modcrew.injectCss('body { background: #2563eb !important }', {
+  // inspect snap for class names actually present on the page
+  await modcrew.injectCss(generatedCss, {
     urlPattern: 'https://www.youtube.com/watch*',
     intent: 'Blue YouTube watch pages'
   });
@@ -41,12 +54,11 @@ Example — cross-tab style transfer:
   const tabs = await modcrew.listTabs();
   const ref = tabs.find(t => t.url.includes('vercel.com'));
   const refSnap = await modcrew.snapshot(ref.tabId);
-  // analyze refSnap, generate CSS, then:
   await modcrew.injectCss(generatedCss, {urlPattern: 'https://github.com/*'});
 
-If your code throws, you'll get the error message and stack — adjust and call again. Iteration is the intended workflow.
+If your code throws, you'll get the error message and stack — adjust and call again.
 
-Prefer narrow urlPattern (e.g. /watch*) over whole-domain when the user's intent only targets specific pages. persist defaults to true — change only for one-off experiments.`;
+Prefer narrow urlPattern (e.g. /watch*) over whole-domain when the user's intent only targets specific pages.`;
 
 const SEARCH_DESCRIPTION = `Look up the modcrew JS API surface. Returns method signatures, options, and examples for everything available inside modcrew_execute. Call this when you forget a method's options or need usage patterns.
 
