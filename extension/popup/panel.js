@@ -15,6 +15,7 @@ let currentCmd = "";
 let currentDomain = null;
 let allMods = [];
 let filter = "current";
+let autoSyncTriggered = false;
 
 function buildCmd(mcpUrl) {
   return `claude mcp add modcrew --transport http ${mcpUrl}`;
@@ -39,11 +40,21 @@ async function refreshStatus() {
   // 而是引导用户访问 modcrew.dev/install 触发同步。
   if (resp?.unverified) {
     currentCmd = "";
-    cmdEl.innerHTML =
-      '<a href="https://modcrew.dev/install" target="_blank" style="color:#fff;text-decoration:underline">' +
-      "Click here to finalize setup" +
-      "</a><br><span style=\"opacity:.7\">Restores your previous token if you've installed before.</span>";
-    setupHint.textContent = "Finalizing... your token may change after sync.";
+    // 自动后台开 modcrew.dev tab 触发 content script sync。
+    // popup 这边继续 2 秒轮询，unverified 翻成 false 后自动显示真命令。
+    if (!autoSyncTriggered) {
+      autoSyncTriggered = true;
+      try {
+        await chrome.tabs.create({
+          url: "https://modcrew.dev/install",
+          active: false, // 后台 tab，不抢焦点
+        });
+      } catch (e) {
+        console.warn("[modcrew] auto-sync failed to open tab:", e);
+      }
+    }
+    cmdEl.textContent = "Restoring your previous setup…";
+    setupHint.textContent = "Keep this popup open for a second. Auto-finalizing now.";
     copyBtn.style.display = "none";
   } else if (resp?.mcpUrl) {
     currentCmd = buildCmd(resp.mcpUrl);
