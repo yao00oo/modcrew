@@ -1,0 +1,15 @@
+<!doctype html>
+<!--
+  Offscreen document — bridge between SW and sandbox iframe.
+  有 chrome.runtime 访问；但 CSP 禁止 eval — 所以实际跑代码的是里面那个 iframe (sandbox)。
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>html,body{margin:0;padding:0;width:0;height:0;overflow:hidden}iframe{display:none}</style>
+  </head>
+  <body>
+    <iframe id="sandbox" src="sandbox.html"></iframe>
+    <script src="offscreen.js"></script>
+  </body>
+</html>

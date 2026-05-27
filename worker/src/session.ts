@@ -163,7 +163,7 @@ export class ModCrewSession {
         result = {
           protocolVersion: "2025-03-26",
           capabilities: { tools: {} },
-          serverInfo: { name: "modcrew", version: "1.0.0" },
+          serverInfo: { name: "modcrew", version: "1.0.1" },
         };
       } else if (method === "notifications/initialized") {
         return new Response(null, { status: 204 }); // notification, no response

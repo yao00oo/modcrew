@@ -18,6 +18,16 @@ import { getApiBase, wsUrl } from "./shared/config.js";
 import { maybeCheck as maybeCheckUpdate } from "./shared/update-check.js";
 import { handleExecute } from "./shared/handlers/execute.js";
 import { handleSearch } from "./shared/handlers/search.js";
+import { handleSnapshot } from "./shared/handlers/snapshot.js";
+import { handleFindElement } from "./shared/handlers/find-element.js";
+import { handleInjectCss } from "./shared/handlers/inject-css.js";
+import { handleInjectJs } from "./shared/handlers/inject-js.js";
+import { handleScreenshot } from "./shared/handlers/screenshot.js";
+import { handleListTabs } from "./shared/handlers/list-tabs.js";
+import { handleListMods } from "./shared/handlers/list-mods.js";
+import { handleToggleMod } from "./shared/handlers/toggle-mod.js";
+import { handleDeleteMod } from "./shared/handlers/delete-mod.js";
+import { handleSaveMod } from "./shared/handlers/save-mod.js";
 
 const KEEPALIVE_MS = 20_000;
 
@@ -155,9 +165,76 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-// 内部消息（popup / content script）
+// modcrew.* API 入口（被 offscreen 转发过来的 sandbox 调用）
+async function resolveTabId(maybeTabId) {
+  if (maybeTabId) return maybeTabId;
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tabs[0]?.id;
+}
+
+async function handleModcrewApiCall(method, args) {
+  switch (method) {
+    case "snapshot":
+      return handleSnapshot(await resolveTabId(args[0]));
+    case "findElement":
+      return handleFindElement(await resolveTabId(args[1]), args[0]);
+    case "injectCss": {
+      const [css, opts = {}] = args;
+      return handleInjectCss(
+        await resolveTabId(opts.tabId),
+        css,
+        opts.persist,
+        opts.urlPattern,
+        opts.intent
+      );
+    }
+    case "injectJs": {
+      const [code, opts = {}] = args;
+      return handleInjectJs(
+        await resolveTabId(opts.tabId),
+        code,
+        opts.persist,
+        opts.urlPattern,
+        opts.intent
+      );
+    }
+    case "screenshot":
+      return handleScreenshot(await resolveTabId(args[0]));
+    case "listTabs":
+      return handleListTabs();
+    case "listMods":
+      return handleListMods(args[0]);
+    case "toggleMod":
+      return handleToggleMod(args[0], args[1]);
+    case "deleteMod":
+      return handleDeleteMod(args[0]);
+    case "saveMod": {
+      const mod = args[0] || {};
+      return handleSaveMod(
+        await resolveTabId(mod.tabId),
+        mod.intent,
+        mod.content,
+        mod.contentType,
+        mod.urlPattern
+      );
+    }
+    default:
+      throw new Error(`Unknown modcrew API method: ${method}`);
+  }
+}
+
+// 内部消息（popup / content script / offscreen）
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
+    if (msg.type === "modcrew-api-call") {
+      try {
+        const result = await handleModcrewApiCall(msg.method, msg.args || []);
+        sendResponse({ ok: true, result });
+      } catch (e) {
+        sendResponse({ ok: false, error: e?.message ?? String(e) });
+      }
+      return;
+    }
     if (msg.type === "get_status") {
       const { updateInfo } = await chrome.storage.local.get("updateInfo");
       const base = await getApiBase();

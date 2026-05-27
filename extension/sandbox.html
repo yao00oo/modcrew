@@ -1,0 +1,14 @@
+<!doctype html>
+<!--
+  Sandboxed page (declared in manifest sandbox.pages).
+  允许 eval / new Function — 用来跑 LLM 生成的 modcrew_execute 代码。
+  没有 chrome.* 访问权限，需要通过 postMessage 找 parent (offscreen) 代理。
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+  </head>
+  <body>
+    <script src="sandbox.js"></script>
+  </body>
+</html>

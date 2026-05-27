@@ -35,6 +35,12 @@ export default {
       return cors(Response.json({ ok: true, ts: Date.now() }));
     }
 
+    // /extension[?v=1.0.0]  → 查 GitHub Releases，302 转到 zip
+    // 用户端的下载链接保持在 modcrew.dev/api 域下，不暴露 github.com
+    if (pathname === "/extension") {
+      return handleExtensionDownload(url);
+    }
+
     // /mcp/:token  /ws/:token  → 路由到 Durable Object
     const sessionMatch = pathname.match(/^\/(mcp|ws)\/([^/]+)/);
     if (sessionMatch) {
@@ -52,3 +58,38 @@ export default {
     return cors(new Response("Not Found", { status: 404 }));
   },
 };
+
+async function handleExtensionDownload(url: URL): Promise<Response> {
+  const wantVersion = url.searchParams.get("v");
+  const apiUrl = wantVersion
+    ? `https://api.github.com/repos/yao00oo/modcrew/releases/tags/v${wantVersion}`
+    : `https://api.github.com/repos/yao00oo/modcrew/releases/latest`;
+
+  const resp = await fetch(apiUrl, {
+    headers: {
+      "User-Agent": "modcrew-worker",
+      Accept: "application/vnd.github+json",
+    },
+    cf: { cacheTtl: 300, cacheEverything: true },
+  });
+  if (!resp.ok) {
+    return new Response(`GitHub API ${resp.status}`, { status: 502 });
+  }
+  const data = (await resp.json()) as {
+    tag_name?: string;
+    assets?: Array<{ name?: string; browser_download_url?: string }>;
+  };
+  const asset = data.assets?.find((a) => a.name?.endsWith(".zip"));
+  if (!asset?.browser_download_url) {
+    return new Response("No zip asset in release", { status: 404 });
+  }
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: asset.browser_download_url,
+      "Cache-Control": "public, max-age=300",
+      "Content-Disposition": `attachment; filename="${asset.name}"`,
+      "X-Modcrew-Resolved-Version": data.tag_name || "unknown",
+    },
+  });
+}
