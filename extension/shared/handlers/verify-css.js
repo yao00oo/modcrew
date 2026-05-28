@@ -160,11 +160,90 @@ export async function verifyCss(tabId, css) {
         const partial = rulesReport.filter((r) => r.status === "partial").length;
         const noMatch = rulesReport.filter((r) => r.status === "no-matches").length;
 
-        // top blocker classes
         const topBlockers = Object.entries(seenCommonBlockers)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5)
           .map(([cls, count]) => ({ class: cls, hits: count }));
+
+        // === Coverage: 我改的占了页面的多少？===
+        // 找 CSS 里第一个 color-type 属性的期望值；随机采样 30 个 visible 元素，
+        // 看有多少元素的对应属性 = 那个期望值。
+        let coverage = null;
+        try {
+          const firstColorRule = (() => {
+            for (const rule of sheet.cssRules) {
+              if (!(rule instanceof CSSStyleRule)) continue;
+              for (let i = 0; i < rule.style.length; i++) {
+                const p = rule.style[i];
+                if (COLOR_PROPS.has(p)) {
+                  return { prop: p, val: rule.style.getPropertyValue(p) };
+                }
+              }
+            }
+            return null;
+          })();
+
+          if (firstColorRule) {
+            const cssProp = firstColorRule.prop;
+            const expectedNorm = norm(cssProp, firstColorRule.val);
+            const camel = propKebabToCamel(cssProp);
+            const all = document.querySelectorAll(
+              "body *:not(script):not(style):not(meta):not(link)"
+            );
+            // 只看 viewport 内可见的
+            const visible = [];
+            for (const el of all) {
+              if (visible.length >= 800) break; // 上限保守，遍历不卡 main thread
+              const r = el.getBoundingClientRect();
+              if (r.width <= 0 || r.height <= 0) continue;
+              if (r.bottom < 0 || r.top > innerHeight) continue;
+              if (r.right < 0 || r.left > innerWidth) continue;
+              const s = getComputedStyle(el);
+              if (s.visibility === "hidden" || s.display === "none") continue;
+              visible.push(el);
+            }
+            // 随机采样 30
+            const SAMPLE = 30;
+            const sampled = [];
+            const seen = new Set();
+            const tries = Math.min(SAMPLE * 4, visible.length);
+            for (let i = 0; i < tries && sampled.length < SAMPLE; i++) {
+              const idx = Math.floor(Math.random() * visible.length);
+              if (seen.has(idx)) continue;
+              seen.add(idx);
+              sampled.push(visible[idx]);
+            }
+            let affected = 0;
+            const untouchedClassHits = {};
+            for (const el of sampled) {
+              const actual =
+                getComputedStyle(el)[camel] ||
+                getComputedStyle(el).getPropertyValue(cssProp);
+              if (actual === expectedNorm) {
+                affected++;
+              } else if (typeof el.className === "string") {
+                for (const c of el.className.trim().split(/\s+/)) {
+                  if (!c) continue;
+                  untouchedClassHits["." + c] = (untouchedClassHits["." + c] || 0) + 1;
+                }
+              }
+            }
+            const percent =
+              sampled.length === 0 ? 0 : Math.round((affected / sampled.length) * 100);
+            const topUntouched = Object.entries(untouchedClassHits)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 4)
+              .map(([cls, hits]) => ({ class: cls, hits }));
+            coverage = {
+              prop: cssProp,
+              target: expectedNorm,
+              visibleSamples: sampled.length,
+              affected,
+              percent,
+              topUntouched,
+            };
+          }
+        } catch {}
 
         let summary;
         if (rulesReport.length === 0) {
@@ -186,6 +265,21 @@ export async function verifyCss(tabId, css) {
           }
         }
 
+        // Coverage 总结，单独一句话
+        if (coverage && coverage.visibleSamples > 0) {
+          if (coverage.percent < 30) {
+            summary +=
+              ` ⚠ Coverage low: only ${coverage.percent}% of visible elements got the ${coverage.prop}.` +
+              (coverage.topUntouched.length
+                ? " Untouched dominants: " +
+                  coverage.topUntouched.map((t) => `${t.class}(${t.hits}×)`).join(", ") +
+                  ". If user wanted a whole-page change, re-inject targeting these."
+                : "");
+          } else if (coverage.percent < 60) {
+            summary += ` Partial coverage: ${coverage.percent}% of visible elements affected.`;
+          }
+        }
+
         return {
           rulesChecked: rulesReport.length,
           rulesEffective: effective,
@@ -193,6 +287,7 @@ export async function verifyCss(tabId, css) {
           rulesPartial: partial,
           rulesNoMatch: noMatch,
           topBlockers,
+          coverage,
           summary,
           details: rulesReport,
         };
