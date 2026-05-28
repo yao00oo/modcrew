@@ -1,11 +1,13 @@
-// IndexedDB schema (v3):
+// IndexedDB schema (v5):
 //   mods:  { id, domain, urlPattern, intent, type ('css'|'js'),
 //            content, enabled, createdAt }
 //   audit: { id (auto), timestamp, tool, method, args (short summary),
 //            ok, error, durationMs }
+//   kv:    { key, value, updatedAt }
+//   menus: { id, label, code, urlPattern?, world?, createdAt }
 
 const DB_NAME = "modcrew";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const AUDIT_KEEP = 200;
 let dbPromise = null;
 
@@ -42,6 +44,9 @@ export function openDB() {
       }
       if (oldV < 4 && !db.objectStoreNames.contains("kv")) {
         db.createObjectStore("kv", { keyPath: "key" });
+      }
+      if (oldV < 5 && !db.objectStoreNames.contains("menus")) {
+        db.createObjectStore("menus", { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -111,6 +116,16 @@ export async function toggleMod(id, enabled) {
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getModById(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("mods", "readonly");
+    const req = tx.objectStore("mods").get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
   });
 }
 

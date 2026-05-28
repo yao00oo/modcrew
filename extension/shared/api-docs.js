@@ -151,6 +151,37 @@ if (prev) await modcrew.injectCss(prev);
 await modcrew.setValue('youtube:lastDarkCss', generatedCss);
 \`\`\`
 
+#### Batch KV — \`modcrew.getValues([k1, k2, ...]) / setValues({k1: v1, k2: v2, ...}) / deleteValues([...])\`
+Atomic batch operations on the KV store. Equivalent to Tampermonkey/Violentmonkey \`GM_getValues/GM_setValues\` (v5.3+).
+
+\`\`\`js
+await modcrew.setValues({ 'crushon:state': {...}, 'crushon:lastChat': 'abc' });
+const { 'crushon:state': s, 'crushon:lastChat': c } = await modcrew.getValues(['crushon:state', 'crushon:lastChat']);
+\`\`\`
+
+#### modcrew.addValueChangeListener({ key, code, urlPattern? })
+Run \`code\` (a JS source string) in MAIN world whenever a key changes. Receives \`this = { key, value, oldValue, op }\` inside the callback body. Persists as a normal mod — survives reloads. To remove: \`modcrew.listMods()\` → find the entry with intent \`kv-listener:KEY\` → \`modcrew.deleteMod(id)\`.
+
+\`\`\`js
+await modcrew.addValueChangeListener({
+  key: 'crushon:stageState',
+  urlPattern: 'https://crushon.ai/*',
+  code: 'document.querySelector("#stage-debug").textContent = JSON.stringify(this.value);',
+});
+\`\`\`
+
+### Context menu — \`modcrew.menu / unregisterMenu / listMenus\`
+Register a persistent right-click item under "ModCrew → ...". When the user clicks it, \`code\` runs in the target tab. Equivalent in spirit to \`GM_registerMenuCommand\` (but stored across sessions, not per-userscript).
+
+\`\`\`js
+const { id } = await modcrew.menu({
+  label: 'Toggle dark mode',
+  urlPattern: 'https://crushon.ai/*',
+  code: 'document.documentElement.classList.toggle("dark")',
+});
+await modcrew.unregisterMenu(id);
+\`\`\`
+
 ### modcrew.saveMod({intent, content, contentType, urlPattern, tabId?})
 Save a mod with a custom urlPattern (different from current page). Most of the time you don't need this — \`injectCss\`/\`injectJs\` already persist.
 
@@ -161,6 +192,46 @@ await modcrew.saveMod({
   content: '[class*=newsletter], [class*=popup] { display:none !important; }',
   urlPattern: 'https://*/*',
 });
+\`\`\`
+
+### Cookies — \`modcrew.cookie.{get,list,set,delete}\`
+Equivalent to Tampermonkey's \`GM_cookie\`. Runs in service worker so HttpOnly cookies are visible.
+
+\`\`\`js
+const c = await modcrew.cookie.get({ url: 'https://example.com', name: 'session' });
+const all = await modcrew.cookie.list({ domain: 'example.com' });
+await modcrew.cookie.set({ url: 'https://example.com', name: 'foo', value: 'bar', expirationDate: Math.floor(Date.now()/1000) + 3600 });
+await modcrew.cookie.delete({ url: 'https://example.com', name: 'foo' });
+\`\`\`
+
+### Clipboard — \`modcrew.clipboardWrite(text, tabId?)\`
+Equivalent to \`GM_setClipboard\`. Tries \`navigator.clipboard\` in the target tab first; falls back to an offscreen \`execCommand("copy")\`.
+
+\`\`\`js
+await modcrew.clipboardWrite('hello');
+\`\`\`
+
+### Desktop notification — \`modcrew.notification(opts)\`
+Equivalent to \`GM_notification\`. Accepts a string or \`{ title, message, iconUrl, image, timeout, silent, requireInteraction }\`.
+
+\`\`\`js
+await modcrew.notification({ title: 'Done', message: 'Style applied.', timeout: 4000 });
+\`\`\`
+
+### Tab control — \`modcrew.openTab(url, opts?) / closeTab(tabId) / getTab(tabId)\`
+Equivalent to \`GM_openInTab\` + variations. \`opts\`: \`{ active, windowId, index, pinned }\`. Returns \`{tabId, url, windowId}\`.
+
+\`\`\`js
+const { tabId } = await modcrew.openTab('https://example.com', { active: false });
+const info = await modcrew.getTab(tabId);
+await modcrew.closeTab(tabId);
+\`\`\`
+
+### Downloads — \`modcrew.download(opts) / downloadCancel(downloadId)\`
+Equivalent to \`GM_download\`. \`opts\`: \`{ url, filename?, saveAs?, conflictAction? }\` (\`conflictAction\` is "uniquify" | "overwrite" | "prompt"). Returns \`{downloadId}\`.
+
+\`\`\`js
+const { downloadId } = await modcrew.download({ url: 'https://example.com/a.zip', filename: 'a.zip' });
 \`\`\`
 
 ## Multi-step patterns

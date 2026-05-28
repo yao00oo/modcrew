@@ -45,10 +45,40 @@ import { handleFill } from "./shared/handlers/fill.js";
 import { handleHover } from "./shared/handlers/hover.js";
 import { handleWaitFor } from "./shared/handlers/wait-for.js";
 import {
+  handleCookieGet,
+  handleCookieList,
+  handleCookieSet,
+  handleCookieDelete,
+} from "./shared/handlers/cookie.js";
+import { handleClipboardWrite } from "./shared/handlers/clipboard.js";
+import { handleNotification } from "./shared/handlers/notification.js";
+import {
+  handleOpenTab,
+  handleCloseTab,
+  handleGetTab,
+} from "./shared/handlers/tabs.js";
+import { handleDownload, handleDownloadCancel } from "./shared/handlers/download.js";
+import {
+  handleRegisterMenu,
+  handleUnregisterMenu,
+  handleListMenus,
+  rebuildContextMenus,
+  runMenuByClick,
+} from "./shared/handlers/menu.js";
+import {
+  reconcileUserScripts,
+  configureUserScriptWorld,
+  probeUserScriptsReady,
+} from "./shared/handlers/user-scripts.js";
+import {
   handleGetValue,
   handleSetValue,
   handleDeleteValue,
   handleListValues,
+  handleGetValues,
+  handleSetValues,
+  handleDeleteValues,
+  handleAddValueChangeListener,
 } from "./shared/handlers/kv.js";
 
 const KEEPALIVE_MS = 20_000;
@@ -456,8 +486,62 @@ async function handleModcrewApiCall(method, args) {
       case "listValues":
         result = await handleListValues(args[0]);
         break;
+      case "getValues":
+        result = await handleGetValues(args[0]);
+        break;
+      case "setValues":
+        result = await handleSetValues(args[0]);
+        break;
+      case "deleteValues":
+        result = await handleDeleteValues(args[0]);
+        break;
+      case "addValueChangeListener":
+        result = await handleAddValueChangeListener(args[0]);
+        break;
       case "getLastPicked":
         result = await getLastPicked();
+        break;
+      case "cookie.get":
+        result = await handleCookieGet(args[0]);
+        break;
+      case "cookie.list":
+        result = await handleCookieList(args[0]);
+        break;
+      case "cookie.set":
+        result = await handleCookieSet(args[0]);
+        break;
+      case "cookie.delete":
+        result = await handleCookieDelete(args[0]);
+        break;
+      case "clipboardWrite":
+        result = await handleClipboardWrite(await resolveTabId(args[1]), args[0]);
+        break;
+      case "notification":
+        result = await handleNotification(args[0]);
+        break;
+      case "openTab":
+        result = await handleOpenTab(args[0], args[1] || {});
+        break;
+      case "closeTab":
+        result = await handleCloseTab(args[0]);
+        break;
+      case "getTab":
+        result = await handleGetTab(args[0]);
+        break;
+      case "download":
+        result = await handleDownload(args[0]);
+        break;
+      case "downloadCancel":
+        result = await handleDownloadCancel(args[0]);
+        break;
+      case "menu":
+        result = await handleRegisterMenu(args[0]);
+        break;
+      case "unregisterMenu":
+        result = await handleUnregisterMenu(args[0]);
+        break;
+      case "listMenus":
+        result = await handleListMenus();
         break;
       default:
         throw new Error(`Unknown modcrew API method: ${method}`);
@@ -611,6 +695,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         return;
       }
       for (const mod of msg.mods) {
+        // chrome.userScripts 注册过的 JS mod，Chrome 自己会注入，跳过
+        if (mod.type === "js" && mod.useUserScripts === true) continue;
         try {
           if (mod.type === "css") {
             await chrome.scripting.insertCSS({ target: { tabId }, css: mod.content });
@@ -634,7 +720,33 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 // 启动
-openDB().then(() => connect());
+openDB().then(async () => {
+  connect();
+  rebuildContextMenus().catch((e) => console.warn("[modcrew] rebuild menus failed:", e));
+  // chrome.userScripts 对账：补齐缺的、清掉孤儿
+  try {
+    if (await probeUserScriptsReady()) {
+      await configureUserScriptWorld();
+      await reconcileUserScripts();
+    }
+  } catch (e) {
+    console.warn("[modcrew] userScripts reconcile failed:", e?.message || e);
+  }
+});
+
+chrome.contextMenus?.onClicked.addListener((info, tab) => {
+  runMenuByClick(info, tab).catch((e) =>
+    console.warn("[modcrew] menu click failed:", e)
+  );
+});
+
+// 装机/启动时重建 menu（service worker 重启场景）
+chrome.runtime?.onInstalled?.addListener(() => {
+  rebuildContextMenus().catch(() => {});
+});
+chrome.runtime?.onStartup?.addListener(() => {
+  rebuildContextMenus().catch(() => {});
+});
 
 // 启动后尝试自动 sync：如果当前 token 是 unverified（首装 / 重装后初始化），
 // 看用户有没有 modcrew.dev tab 开着，有的话注入 content script 跑一次 sync，

@@ -84,6 +84,23 @@ window.addEventListener("message", async (e) => {
 
 // SW → offscreen: 跑一段 code
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  // Clipboard write 兜底（SW 没 navigator.clipboard，offscreen 也没；走 execCommand）
+  if (msg?.type === "modcrew-clipboard-write") {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = String(msg.text ?? "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      sendResponse({ ok });
+    } catch (e) {
+      sendResponse({ ok: false, error: e?.message ?? String(e) });
+    }
+    return; // sync sendResponse
+  }
   if (msg?.type !== "modcrew-execute-in-sandbox") return; // 不是我的消息
   (async () => {
     await whenSandboxReady();

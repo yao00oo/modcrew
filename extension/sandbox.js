@@ -26,22 +26,37 @@ window.addEventListener("message", (e) => {
   }
 });
 
-// 构造 modcrew Proxy — 任何 modcrew.X(...) 都走 postMessage
+// 构造 modcrew Proxy — 任何 modcrew.X(...) 走 postMessage。
+// 支持二级命名空间: modcrew.cookie.get(...) → method = "cookie.get"
+function callMethod(method, args) {
+  const callId = ++callSeq;
+  return new Promise((resolve, reject) => {
+    pending.set(callId, { resolve, reject });
+    parent.postMessage(
+      { type: "modcrew-api-call", callId, method, args },
+      "*"
+    );
+  });
+}
+
 function buildModcrewProxy() {
   return new Proxy(
     {},
     {
-      get(_target, method) {
-        return (...args) => {
-          const callId = ++callSeq;
-          return new Promise((resolve, reject) => {
-            pending.set(callId, { resolve, reject });
-            parent.postMessage(
-              { type: "modcrew-api-call", callId, method: String(method), args },
-              "*"
-            );
-          });
-        };
+      get(_target, top) {
+        const topName = String(top);
+        // 顶层既可能是函数 (modcrew.snapshot()) 也可能是命名空间 (modcrew.cookie.get())
+        // 返回 callable proxy：可调用 + 可继续 .x
+        const callable = (...args) => callMethod(topName, args);
+        return new Proxy(callable, {
+          get(_t, sub) {
+            // 跳过 Promise / Function 内部 symbol
+            if (typeof sub === "symbol") return undefined;
+            const subName = String(sub);
+            if (subName === "then" || subName === "catch" || subName === "finally") return undefined;
+            return (...args) => callMethod(`${topName}.${subName}`, args);
+          },
+        });
       },
     }
   );
