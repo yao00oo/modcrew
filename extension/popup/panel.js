@@ -506,7 +506,57 @@ pickedClear.onclick = async () => {
   await refreshPicked();
 };
 
+// === Last action banner (30s undo) ===
+const lastActionBanner = document.getElementById("last-action-banner");
+const actionMsg = document.getElementById("action-msg");
+const actionSub = document.getElementById("action-sub");
+const actionUndoBtn = document.getElementById("action-undo");
+const actionDismissBtn = document.getElementById("action-dismiss");
+
+async function refreshLastAction() {
+  const a = await chrome.runtime.sendMessage({ type: "get_last_action" });
+  if (!a) {
+    lastActionBanner.style.display = "none";
+    return;
+  }
+  const secs = Math.max(0, Math.ceil((a.expiresAt - Date.now()) / 1000));
+  if (secs <= 0) {
+    lastActionBanner.style.display = "none";
+    return;
+  }
+  lastActionBanner.style.display = "flex";
+  const label =
+    a.type === "injectCss"
+      ? "Injected CSS"
+      : a.type === "injectJs"
+      ? "Injected JS"
+      : a.type;
+  actionMsg.textContent = `${label}: ${a.intent || "(no message)"}`;
+  actionSub.textContent = `${a.domain} · v${a.version} · ${secs}s left`;
+}
+
+actionUndoBtn.onclick = async () => {
+  actionUndoBtn.disabled = true;
+  actionUndoBtn.textContent = "…";
+  const resp = await chrome.runtime.sendMessage({ type: "undo_last_action" });
+  if (!resp?.ok) {
+    alert("Undo failed: " + (resp?.error || "unknown"));
+    actionUndoBtn.disabled = false;
+    actionUndoBtn.textContent = "Undo";
+    return;
+  }
+  lastActionBanner.style.display = "none";
+  await loadMods();
+};
+
+actionDismissBtn.onclick = async () => {
+  await chrome.runtime.sendMessage({ type: "clear_last_action" });
+  lastActionBanner.style.display = "none";
+};
+
 refreshStatus();
 loadMods();
 refreshPicked();
+refreshLastAction();
 setInterval(refreshStatus, 2000);
+setInterval(refreshLastAction, 1000);

@@ -24,6 +24,8 @@ import {
   setLastPicked,
   getLastPicked,
   clearLastPicked,
+  getLastAction,
+  clearLastAction,
 } from "./shared/storage.js";
 import { getApiBase, wsUrl } from "./shared/config.js";
 import { maybeCheck as maybeCheckUpdate } from "./shared/update-check.js";
@@ -735,6 +737,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     } else if (msg.type === "list_archived") {
       const archived = await handleListArchivedMods(msg.domain);
       sendResponse(archived);
+    } else if (msg.type === "get_last_action") {
+      const a = await getLastAction();
+      sendResponse(a);
+    } else if (msg.type === "clear_last_action") {
+      await clearLastAction();
+      sendResponse({ ok: true });
+    } else if (msg.type === "undo_last_action") {
+      try {
+        const a = await getLastAction();
+        if (!a) {
+          sendResponse({ ok: false, error: "no recent action" });
+          return;
+        }
+        // 第一次 inject (previousVersion=null) → archive 整个 mod
+        // 后续 inject → revertTo previousVersion
+        if (a.previousVersion == null) {
+          await handleArchiveMod(a.modId);
+        } else {
+          await handleRevertTo(a.modId, a.previousVersion);
+        }
+        await clearLastAction();
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e?.message ?? String(e) });
+      }
     } else if (msg.type === "restore_mod") {
       try {
         await handleRestoreMod(msg.id);

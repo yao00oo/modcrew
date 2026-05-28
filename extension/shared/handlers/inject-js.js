@@ -3,6 +3,7 @@ import {
   getModById,
   appendModVersion,
   createInitialModVersion,
+  setLastAction,
 } from "../storage.js";
 import {
   isUserScriptsAvailable,
@@ -58,6 +59,15 @@ export async function handleInjectJs(tabId, code, urlPattern, intent, modId) {
     if (mod.useUserScripts && isUserScriptsAvailable()) {
       await registerModAsUserScript({ ...mod, content: code, urlPattern: pattern });
     }
+    await setLastAction({
+      type: "injectJs",
+      modId,
+      version: v.version,
+      previousVersion: mod.currentVersion,
+      intent: intent || mod.intent,
+      domain: url.hostname,
+      urlPattern: pattern,
+    });
     return { ok: true, modId, version: v.version, consoleOutput };
   }
 
@@ -89,6 +99,15 @@ export async function handleInjectJs(tabId, code, urlPattern, intent, modId) {
     intent: intent || "(initial)",
     urlPattern: pattern,
     author: "mcp",
+  });
+  await setLastAction({
+    type: "injectJs",
+    modId: newId,
+    version: 1,
+    previousVersion: null,
+    intent: intent || "(initial)",
+    domain: url.hostname,
+    urlPattern: pattern,
   });
   return {
     ok: true,

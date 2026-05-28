@@ -170,7 +170,27 @@ export class ModCrewSession {
         result = {
           protocolVersion: "2025-03-26",
           capabilities: { tools: {} },
-          serverInfo: { name: "modcrew", version: "1.7.0" },
+          serverInfo: { name: "modcrew", version: "1.8.0" },
+          instructions: [
+            "modcrew lets you modify any website via the user's Chrome extension.",
+            "",
+            "User-reference heuristics (read this before guessing):",
+            '- User says "这里 / 这块 / 这个 / this / that / it" → first call modcrew.getLastPicked(). If nothing picked, ASK the user to click "Pick element" in the popup. Do NOT guess from page text or screenshots.',
+            '- User sends an image with no clear instruction ("细节优化", "继续优化"): treat as feedback on what you just did. Compare to your previous modcrew.screenshot. If you have no baseline, snapshot + screenshot now and ASK what specifically should change.',
+            "- User mentions a brand/site name that's NOT the active tab (e.g. 'crushon' while on modyolo): call modcrew.listTabs() first to operate on the right tab.",
+            "",
+            "Iteration:",
+            "- modcrew.injectCss now returns a verifyReport. If rulesEffective < rulesChecked, the page's existing CSS is winning. Use the topBlockers info to write more specific selectors (reuse those exact class names + !important).",
+            '- User says "再深一点 / 改一下刚才那个 / 调整下": listMods → find recencyHint=last_session → pass that mod\'s id as opts.modId. Never create a duplicate mod for iteration.',
+            "",
+            "Design quality:",
+            "- For visual polish, contrast, typography hierarchy, spacing: if the session has skills like `frontend-design` or `impeccable` available, invoke them. They give you stronger design judgment than relying on prior alone.",
+            "- For 'make page X color' requests: prefer (a) reusing the page's own selectors with !important, or (b) `html { filter: hue-rotate(deg) saturate(x) }` for guaranteed coverage. Never just `body { background: X !important }` — it loses to card-class !important.",
+            "",
+            "Library + Undo:",
+            "- Every injectCss/injectJs creates a version. The user can revert from the popup or via modcrew.revertTo(modId, version).",
+            "- Delete defaults to soft (archive). Only pass {hard:true} if user explicitly confirms permanent loss.",
+          ].join("\n"),
         };
       } else if (method === "notifications/initialized") {
         return new Response(null, { status: 204 }); // notification, no response

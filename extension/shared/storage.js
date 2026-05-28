@@ -318,6 +318,30 @@ export async function clearLastPicked() {
   await chrome.storage.local.remove(PICKED_KEY);
 }
 
+// === Last action (Undo banner support) ===
+
+const LAST_ACTION_KEY = "modcrew_last_action";
+const LAST_ACTION_TTL_MS = 30_000;
+
+export async function setLastAction(action) {
+  const now = Date.now();
+  await chrome.storage.local.set({
+    [LAST_ACTION_KEY]: { ...action, at: now, expiresAt: now + LAST_ACTION_TTL_MS },
+  });
+}
+
+export async function getLastAction() {
+  const data = await chrome.storage.local.get(LAST_ACTION_KEY);
+  const a = data[LAST_ACTION_KEY];
+  if (!a) return null;
+  if (a.expiresAt && a.expiresAt < Date.now()) return null;
+  return a;
+}
+
+export async function clearLastAction() {
+  await chrome.storage.local.remove(LAST_ACTION_KEY);
+}
+
 // === Mod versions (history) ===
 
 // 新建 mod 时写 v1 —— 不走 appendModVersion 因为它会把 currentVersion 推到 2

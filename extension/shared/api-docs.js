@@ -27,7 +27,26 @@ const match = await modcrew.findElement("the 'Subscribe' button");
 \`\`\`
 
 ### modcrew.injectCss(css, opts?)
-Inject CSS into the page. **ALWAYS saved + linear version history**.
+Inject CSS into the page. **ALWAYS saved + linear version history + post-inject verification**.
+
+Returns \`{ ok, modId, version, verifyReport }\`. The \`verifyReport\` runs \`getComputedStyle\` on sampled matched elements and tells you whether each rule actually took effect:
+
+\`\`\`
+{
+  rulesChecked: 5,
+  rulesEffective: 3,
+  rulesBlocked: 1,           // 0 of N elements got the expected value (higher-specificity won)
+  rulesPartial: 1,           // some matched, some didn't
+  topBlockers: [             // class names appearing on un-affected elements — likely winners
+    { class: '.bg-white', hits: 6 },
+    { class: '.card', hits: 4 }
+  ],
+  summary: '3/5 effective, 1 blocked, 1 partial. Likely blocker classes: .bg-white(6×), .card(4×). Try writing more specific selectors targeting them.',
+  details: [...]
+}
+\`\`\`
+
+**Use the report**: if \`rulesEffective < rulesChecked\`, re-inject with a more specific selector. Don't rely on the user telling you it didn't work.
 
 - \`css\` (string, required)
 - \`opts\` (object, optional):

@@ -3,7 +3,9 @@ import {
   getModById,
   appendModVersion,
   createInitialModVersion,
+  setLastAction,
 } from "../storage.js";
+import { verifyCss } from "./verify-css.js";
 
 // inject CSS into a tab + persist as mod.
 // 两条路径：
@@ -44,7 +46,17 @@ export async function handleInjectCss(tabId, css, urlPattern, intent, modId) {
       urlPattern: pattern,
       author: "mcp",
     });
-    return { ok: true, modId, version: v.version };
+    const verifyReport = await verifyCss(tabId, css);
+    await setLastAction({
+      type: "injectCss",
+      modId,
+      version: v.version,
+      previousVersion: mod.currentVersion,
+      intent: intent || mod.intent,
+      domain: url.hostname,
+      urlPattern: pattern,
+    });
+    return { ok: true, modId, version: v.version, verifyReport };
   }
 
   // 路径 2: 无 modId → 新建 mod + v1
@@ -70,5 +82,15 @@ export async function handleInjectCss(tabId, css, urlPattern, intent, modId) {
     urlPattern: pattern,
     author: "mcp",
   });
-  return { ok: true, modId: newId, version: 1 };
+  const verifyReport = await verifyCss(tabId, css);
+  await setLastAction({
+    type: "injectCss",
+    modId: newId,
+    version: 1,
+    previousVersion: null, // 新建 mod，undo = archive
+    intent: intent || "(initial)",
+    domain: url.hostname,
+    urlPattern: pattern,
+  });
+  return { ok: true, modId: newId, version: 1, verifyReport };
 }
