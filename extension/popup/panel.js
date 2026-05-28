@@ -104,6 +104,10 @@ async function refreshStatus() {
   }
 }
 
+let archivedMods = [];
+let expandedHistory = new Set(); // modId 集合：哪些 mod 展开了 version 列表
+const versionsCache = new Map(); // modId → versions[]
+
 async function loadMods() {
   const tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
   try {
@@ -113,16 +117,70 @@ async function loadMods() {
   }
   allMods = await chrome.runtime.sendMessage({ type: "get_all_mods" });
   if (!Array.isArray(allMods)) allMods = [];
+  archivedMods = await chrome.runtime.sendMessage({ type: "list_archived" });
+  if (!Array.isArray(archivedMods)) archivedMods = [];
   renderMods();
 }
 
+function fmtTimeShortMs(ts) {
+  if (!ts) return "";
+  const dt = Date.now() - ts;
+  if (dt < 60000) return "just now";
+  if (dt < 3600000) return `${Math.round(dt / 60000)}m ago`;
+  if (dt < 86400000) return `${Math.round(dt / 3600000)}h ago`;
+  return new Date(ts).toLocaleString();
+}
+
 function renderMods() {
+  modsListEl.innerHTML = "";
+
+  // Archived tab 单独走分支
+  if (filter === "archived") {
+    if (!archivedMods.length) {
+      modsListEl.innerHTML = `<li class="empty">No archived mods.</li>`;
+      return;
+    }
+    archivedMods.sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+    for (const m of archivedMods) {
+      const li = document.createElement("li");
+      li.className = "mod-row archived";
+      li.innerHTML = `
+        <div class="mod-meta">
+          <div class="mod-line">
+            <span class="type-badge ${m.type}">${m.type}</span>
+            <span class="intent">${escapeHtml(m.intent || "(inline)")}</span>
+          </div>
+          <div class="mod-sub">${escapeHtml(m.urlPattern || m.domain)} · archived ${fmtTimeShortMs(m.archivedAt)}</div>
+        </div>
+        <div class="mod-actions">
+          <button class="link-btn restore" data-id="${m.id}" title="Restore this mod">↺</button>
+          <button class="link-btn delete-hard" data-id="${m.id}" title="Delete forever">🗑</button>
+        </div>
+      `;
+      modsListEl.appendChild(li);
+    }
+    modsListEl.querySelectorAll(".restore").forEach((b) =>
+      b.addEventListener("click", async () => {
+        await chrome.runtime.sendMessage({ type: "restore_mod", id: b.dataset.id });
+        await loadMods();
+      })
+    );
+    modsListEl.querySelectorAll(".delete-hard").forEach((b) =>
+      b.addEventListener("click", async () => {
+        if (!confirm("Permanently delete this mod + all its history?")) return;
+        await chrome.runtime.sendMessage({ type: "delete_mod", id: b.dataset.id, hard: true });
+        archivedMods = archivedMods.filter((m) => m.id !== b.dataset.id);
+        renderMods();
+      })
+    );
+    return;
+  }
+
+  // current / all tabs
   const filtered =
     filter === "current" && currentDomain
       ? allMods.filter((m) => m.domain === currentDomain)
       : allMods;
-
-  modsListEl.innerHTML = "";
 
   if (!filtered.length) {
     const msg =
@@ -133,28 +191,38 @@ function renderMods() {
     return;
   }
 
-  filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  filtered.sort(
+    (a, b) =>
+      (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)
+  );
 
   for (const m of filtered) {
     const li = document.createElement("li");
     li.className = "mod-row" + (m.enabled === false ? " disabled" : "");
+    const versionCount = m.currentVersion || 1;
+    const isExpanded = expandedHistory.has(m.id);
     li.innerHTML = `
-      <label class="toggle">
-        <input type="checkbox" data-id="${m.id}" ${m.enabled !== false ? "checked" : ""} />
-      </label>
-      <div class="mod-meta">
-        <div class="mod-line">
-          <span class="type-badge ${m.type}">${m.type}</span>
-          <span class="intent">${escapeHtml(m.intent || "(inline)")}</span>
+      <div class="mod-head">
+        <label class="toggle">
+          <input type="checkbox" data-id="${m.id}" ${m.enabled !== false ? "checked" : ""} />
+        </label>
+        <div class="mod-meta">
+          <div class="mod-line">
+            <span class="type-badge ${m.type}">${m.type}</span>
+            <span class="intent">${escapeHtml(m.intent || "(inline)")}</span>
+            <button class="version-badge ${isExpanded ? "open" : ""}" data-id="${m.id}" title="${versionCount} version${versionCount > 1 ? "s" : ""}">v${versionCount} ${isExpanded ? "▴" : "▾"}</button>
+          </div>
+          <div class="mod-sub">${escapeHtml(m.urlPattern || m.domain)} · edited ${fmtTimeShortMs(m.updatedAt || m.createdAt)}</div>
         </div>
-        <div class="mod-sub">${escapeHtml(m.urlPattern || m.domain)}</div>
+        <div class="mod-actions">
+          <button class="link-btn view" data-id="${m.id}">View</button>
+          <button class="link-btn delete" data-id="${m.id}" title="Archive (recoverable)">×</button>
+        </div>
       </div>
-      <div class="mod-actions">
-        <button class="link-btn view" data-id="${m.id}">View</button>
-        <button class="link-btn delete" data-id="${m.id}">×</button>
-      </div>
+      <div class="mod-history" data-id="${m.id}" style="${isExpanded ? "" : "display:none"}"></div>
     `;
     modsListEl.appendChild(li);
+    if (isExpanded) renderHistory(m.id, li.querySelector(".mod-history"));
   }
 
   modsListEl.querySelectorAll('input[type="checkbox"]').forEach((cb) =>
@@ -171,11 +239,20 @@ function renderMods() {
     })
   );
 
+  modsListEl.querySelectorAll(".version-badge").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const id = b.dataset.id;
+      if (expandedHistory.has(id)) expandedHistory.delete(id);
+      else expandedHistory.add(id);
+      renderMods();
+    })
+  );
+
   modsListEl.querySelectorAll(".view").forEach((b) =>
     b.addEventListener("click", () => {
       const mod = allMods.find((m) => m.id === b.dataset.id);
       if (!mod) return;
-      modalTitle.textContent = `${mod.type} · ${mod.intent || "(inline)"}`;
+      modalTitle.textContent = `${mod.type} · ${mod.intent || "(inline)"} · v${mod.currentVersion || 1}`;
       modalContent.textContent = mod.content || "";
       modal.style.display = "flex";
     })
@@ -185,10 +262,75 @@ function renderMods() {
     b.addEventListener("click", async () => {
       const mod = allMods.find((m) => m.id === b.dataset.id);
       if (!mod) return;
-      if (!confirm(`Delete this ${mod.type} mod?\n\n${mod.intent || "(inline)"}`)) return;
+      // 默认走 archive (soft)，不 confirm —— archive 可恢复，不需要劝阻
       await chrome.runtime.sendMessage({ type: "delete_mod", id: mod.id });
       allMods = allMods.filter((m) => m.id !== mod.id);
+      // archived 列表也更新（重 load）
+      archivedMods = await chrome.runtime.sendMessage({ type: "list_archived" });
       renderMods();
+    })
+  );
+}
+
+async function renderHistory(modId, container) {
+  let versions = versionsCache.get(modId);
+  if (!versions) {
+    versions = await chrome.runtime.sendMessage({
+      type: "list_versions",
+      modId,
+    });
+    versionsCache.set(modId, versions || []);
+  }
+  if (!Array.isArray(versions) || !versions.length) {
+    container.innerHTML = '<div class="history-empty">No version history yet.</div>';
+    return;
+  }
+  const mod = allMods.find((m) => m.id === modId);
+  const headVersion = mod?.currentVersion || versions[0].version;
+  container.innerHTML = "";
+  for (const v of versions) {
+    const isHead = v.version === headVersion;
+    const row = document.createElement("div");
+    row.className = "history-row" + (isHead ? " head" : "");
+    row.innerHTML = `
+      <span class="history-dot ${isHead ? "filled" : ""}"></span>
+      <div class="history-meta">
+        <div class="history-line">
+          <span class="history-ver">v${v.version}</span>
+          <span class="history-when">${fmtTimeShortMs(v.createdAt)}</span>
+          ${v.author === "revert" ? '<span class="history-tag">revert</span>' : ""}
+        </div>
+        <div class="history-msg">${escapeHtml(v.intent || "")}</div>
+      </div>
+      <div class="history-actions">
+        ${
+          isHead
+            ? '<span class="history-head-label">HEAD</span>'
+            : `<button class="link-btn restore-ver" data-modid="${modId}" data-version="${v.version}">Restore</button>`
+        }
+      </div>
+    `;
+    container.appendChild(row);
+  }
+  container.querySelectorAll(".restore-ver").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const modId = b.dataset.modid;
+      const ver = parseInt(b.dataset.version, 10);
+      b.disabled = true;
+      b.textContent = "…";
+      const resp = await chrome.runtime.sendMessage({
+        type: "revert_to",
+        modId,
+        version: ver,
+      });
+      versionsCache.delete(modId); // 强制下次重读
+      if (!resp?.ok) {
+        alert("Revert failed: " + (resp?.error || "unknown"));
+        b.disabled = false;
+        b.textContent = "Restore";
+        return;
+      }
+      await loadMods();
     })
   );
 }

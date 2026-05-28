@@ -1,14 +1,20 @@
-// IndexedDB schema (v5):
+// IndexedDB schema (v6):
 //   mods:  { id, domain, urlPattern, intent, type ('css'|'js'),
-//            content, enabled, createdAt }
+//            content, enabled, currentVersion, archivedAt,
+//            createdAt, updatedAt }
+//   mod_versions: { id (auto), modId, version, content, intent,
+//                   urlPattern, author ('mcp'|'user'|'revert'),
+//                   createdAt }
+//     index by modId
 //   audit: { id (auto), timestamp, tool, method, args (short summary),
 //            ok, error, durationMs }
 //   kv:    { key, value, updatedAt }
 //   menus: { id, label, code, urlPattern?, world?, createdAt }
 
 const DB_NAME = "modcrew";
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const AUDIT_KEEP = 200;
+const VERSIONS_PER_MOD = 50; // 超出删最早的（不删 v1）
 let dbPromise = null;
 
 export function openDB() {
@@ -48,6 +54,40 @@ export function openDB() {
       if (oldV < 5 && !db.objectStoreNames.contains("menus")) {
         db.createObjectStore("menus", { keyPath: "id" });
       }
+      if (oldV < 6) {
+        // mod_versions store
+        if (!db.objectStoreNames.contains("mod_versions")) {
+          const v = db.createObjectStore("mod_versions", {
+            keyPath: "id",
+            autoIncrement: true,
+          });
+          v.createIndex("modId", "modId", { unique: false });
+        }
+        // 给每条现有 mod 写 v1 + currentVersion=1 + updatedAt
+        const tx = ev.target.transaction;
+        const modsStore = tx.objectStore("mods");
+        const versionsStore = tx.objectStore("mod_versions");
+        modsStore.openCursor().onsuccess = (e) => {
+          const cur = e.target.result;
+          if (!cur) return;
+          const m = cur.value;
+          if (m.currentVersion === undefined) {
+            m.currentVersion = 1;
+            m.updatedAt = m.createdAt || Date.now();
+            cur.update(m);
+            versionsStore.add({
+              modId: m.id,
+              version: 1,
+              content: m.content || "",
+              intent: m.intent || "(initial)",
+              urlPattern: m.urlPattern,
+              author: "mcp",
+              createdAt: m.createdAt || Date.now(),
+            });
+          }
+          cur.continue();
+        };
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -70,6 +110,7 @@ export async function getModsMatching(url) {
   const u = new URL(url);
   const candidates = await getModsForDomain(u.hostname);
   return candidates.filter((m) => {
+    if (m.archivedAt) return false; // archived 不应用
     if (m.enabled === false) return false;
     if (!m.urlPattern) return true;
     return matchesPattern(url, m.urlPattern);
@@ -275,4 +316,141 @@ export async function getLastPicked() {
 
 export async function clearLastPicked() {
   await chrome.storage.local.remove(PICKED_KEY);
+}
+
+// === Mod versions (history) ===
+
+// 新建 mod 时写 v1 —— 不走 appendModVersion 因为它会把 currentVersion 推到 2
+export async function createInitialModVersion({ modId, content, intent, urlPattern, author }) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("mod_versions", "readwrite");
+    tx.objectStore("mod_versions").add({
+      modId,
+      version: 1,
+      content,
+      intent: intent || "(initial)",
+      urlPattern,
+      author: author || "mcp",
+      createdAt: Date.now(),
+    });
+    tx.oncomplete = () => resolve({ modId, version: 1 });
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function appendModVersion({ modId, content, intent, urlPattern, author }) {
+  const db = await openDB();
+  const mod = await getModById(modId);
+  if (!mod) throw new Error(`Mod ${modId} not found`);
+  const nextVersion = (mod.currentVersion || 0) + 1;
+  const now = Date.now();
+  // 写 version 行
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction("mod_versions", "readwrite");
+    tx.objectStore("mod_versions").add({
+      modId,
+      version: nextVersion,
+      content,
+      intent: intent || "(no message)",
+      urlPattern: urlPattern || mod.urlPattern,
+      author: author || "mcp",
+      createdAt: now,
+    });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  // 更新 mod HEAD
+  mod.content = content;
+  mod.currentVersion = nextVersion;
+  mod.urlPattern = urlPattern || mod.urlPattern;
+  mod.updatedAt = now;
+  mod.intent = intent || mod.intent;
+  await saveMod(mod);
+  // 异步 prune
+  pruneVersions(modId).catch(() => {});
+  return { modId, version: nextVersion, content, createdAt: now };
+}
+
+async function pruneVersions(modId) {
+  const versions = await listVersionsForMod(modId);
+  if (versions.length <= VERSIONS_PER_MOD) return;
+  // 永远保留 v1（锚点）+ 最新 N-1 个
+  const toDelete = versions
+    .filter((v) => v.version !== 1)
+    .sort((a, b) => a.version - b.version)
+    .slice(0, versions.length - VERSIONS_PER_MOD);
+  if (!toDelete.length) return;
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("mod_versions", "readwrite");
+    const store = tx.objectStore("mod_versions");
+    for (const v of toDelete) store.delete(v.id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function listVersionsForMod(modId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("mod_versions", "readonly");
+    const idx = tx.objectStore("mod_versions").index("modId");
+    const req = idx.getAll(modId);
+    req.onsuccess = () => {
+      const rows = (req.result || []).sort((a, b) => b.version - a.version);
+      resolve(rows);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getModVersion(modId, version) {
+  const versions = await listVersionsForMod(modId);
+  return versions.find((v) => v.version === version) || null;
+}
+
+export async function deleteAllVersions(modId) {
+  const versions = await listVersionsForMod(modId);
+  if (!versions.length) return;
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("mod_versions", "readwrite");
+    const store = tx.objectStore("mod_versions");
+    for (const v of versions) store.delete(v.id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// === Archive / restore ===
+
+export async function archiveModInStorage(id) {
+  const mod = await getModById(id);
+  if (!mod) throw new Error(`Mod ${id} not found`);
+  mod.archivedAt = Date.now();
+  await saveMod(mod);
+  return { ok: true, id };
+}
+
+export async function restoreModInStorage(id) {
+  const mod = await getModById(id);
+  if (!mod) throw new Error(`Mod ${id} not found`);
+  mod.archivedAt = null;
+  await saveMod(mod);
+  return { ok: true, id };
+}
+
+export async function listArchivedMods(domain) {
+  const all = await getAllMods();
+  return all.filter((m) => {
+    if (!m.archivedAt) return false;
+    if (domain) return m.domain === domain;
+    return true;
+  });
+}
+
+export async function listActiveMods(domain) {
+  const all = domain ? await getModsForDomain(domain) : await getAllMods();
+  return all.filter((m) => !m.archivedAt);
 }

@@ -27,24 +27,47 @@ const match = await modcrew.findElement("the 'Subscribe' button");
 \`\`\`
 
 ### modcrew.injectCss(css, opts?)
-Inject CSS into the page. **ALWAYS saved** — auto-applies on every future visit matching \`urlPattern\`. Following Tweeks' model: every modification is a persistent userscript. To undo: \`modcrew.deleteMod(id)\`. To pause: \`modcrew.toggleMod(id, false)\`.
+Inject CSS into the page. **ALWAYS saved + linear version history**.
+
 - \`css\` (string, required)
 - \`opts\` (object, optional):
+  - \`modId\` (string) — **if set, appends a new version on that existing mod** (HEAD advances). If omitted, creates a brand-new mod (v1).
   - \`tabId\` (number)
-  - \`urlPattern\` (string) — Greasemonkey @match. Examples: \`https://www.youtube.com/watch*\`, \`https://github.com/*\`, \`https://*/*\`. Defaults to current tab's whole domain. **Prefer narrow patterns**.
-  - \`intent\` (string) — short label, shows up in the user's Library popup
+  - \`urlPattern\` (string) — Greasemonkey @match. Examples: \`https://www.youtube.com/watch*\`, \`https://github.com/*\`, \`https://*/*\`. Defaults to current tab's whole domain.
+  - \`intent\` (string) — short label / "commit message". Shows in popup + version history.
 
-There is **no** \`persist\` / \`preview\` / \`temporary\` flag. If the user asks for a change, save it. The Library UI is how they manage / undo.
+**UPDATE vs CREATE rule (read this — most LLM bugs come from getting this wrong):**
+
+When the user says "再深一点" / "改一下刚才那个" / "调整下" / "再试试" / similar iteration phrases:
+  1. listMods() first to find the recent target
+  2. Pass that mod's id as \`opts.modId\`
+  3. New version gets appended; old version stays in history (user can revert)
+
+When the user says "再加一个" / "另一个" / "新的 X" / a clearly different intent:
+  - Omit modId → new mod
+
+If \`modId\` is provided and the content is byte-identical to current HEAD → noop (no duplicate version). Idempotent.
+
+There is **no** \`persist\` / \`preview\` / \`temporary\` flag.
 
 \`\`\`js
-await modcrew.injectCss('body { background: #2563eb }', {
+// First time: create
+const a = await modcrew.injectCss('body { background: #2563eb }', {
   urlPattern: 'https://www.youtube.com/watch*',
-  intent: 'Dark blue video pages',
-});
+  intent: 'Blue video pages',
+});  // → { modId: 'X', version: 1 }
+
+// User says "再深一点"
+const mods = await modcrew.listMods('www.youtube.com');
+// pick the most recent one (sort by lastModifiedAt or recencyHint === 'last_session')
+await modcrew.injectCss('body { background: #1e3a8a }', {
+  modId: mods[0].id,                          // ← key: update existing
+  intent: 'Deeper blue video pages',
+});  // → { modId: 'X', version: 2 }
 \`\`\`
 
 ### modcrew.injectJs(code, opts?)
-Same opts as \`injectCss\`. Runs in MAIN world. Same "always saved" semantics — no temporary mode.
+Same opts as \`injectCss\` (including \`modId\` for iteration). Runs in MAIN world. Same "always saved + version history" semantics.
 
 \`\`\`js
 await modcrew.injectJs(\`document.title = '🔥 ' + document.title;\`);
@@ -88,11 +111,18 @@ const vercel = tabs.find(t => t.url.includes('vercel.com'));
 const refSnap = await modcrew.snapshot(vercel.tabId);
 \`\`\`
 
-### modcrew.listMods(domain?)
-List saved mods. Omit \`domain\` for all sites.
+### modcrew.listMods(domain?, opts?)
+List saved (non-archived) mods. \`opts.includeArchived\` to also include archived.
+
+Each entry now includes **iteration hints**:
+- \`versionCount\` — number of revisions on this mod
+- \`lastModifiedAt\` — timestamp of HEAD
+- \`recencyHint\` — \`'last_session' | 'recent' | 'today' | 'older'\` — use this to find the right mod to update when user says "改一下刚才那个"
 
 \`\`\`js
-const youtubeMods = await modcrew.listMods('www.youtube.com');
+const mods = await modcrew.listMods('www.youtube.com');
+// Find the mod the user just made
+const target = mods.find(m => m.recencyHint === 'last_session') || mods[0];
 \`\`\`
 
 ### modcrew.toggleMod(id, enabled)
@@ -102,8 +132,30 @@ Enable/disable a mod without deleting.
 await modcrew.toggleMod('1716822437-abc12', false);
 \`\`\`
 
-### modcrew.deleteMod(id)
-Permanently delete a saved mod.
+### modcrew.deleteMod(id, opts?)
+**Soft-deletes by default** (archive — recoverable from popup → Archived tab, or via \`restoreMod\`).
+- \`opts.hard\` (boolean) — pass \`true\` for permanent deletion (mod + all version history). Avoid unless user explicitly confirms.
+
+### modcrew.archiveMod(id) / modcrew.restoreMod(id)
+Explicit soft delete + un-delete. \`archiveMod\` = same as default \`deleteMod\`. \`restoreMod\` brings it back, re-applies CSS / re-registers userScript.
+
+### modcrew.listVersions(modId) / getVersion(modId, version) / revertTo(modId, version)
+
+History primitives.
+
+- \`listVersions(modId)\` → array \`[{version, intent, urlPattern, author, createdAt, contentPreview, contentLength}, ...]\` newest-first
+- \`getVersion(modId, version)\` → full row including \`content\`
+- \`revertTo(modId, version)\` → appends a new version with \`content\` copied from the target version (HEAD advances, history preserved). Use when user says "回到上一版" / "撤销刚才那个改" / "回到 v2".
+
+\`\`\`js
+// User: "回上一版"
+const versions = await modcrew.listVersions(modId);
+// versions[0] is HEAD (just-made bad change), versions[1] is the previous one
+await modcrew.revertTo(modId, versions[1].version);
+\`\`\`
+
+### modcrew.listArchivedMods(domain?)
+List soft-deleted mods (optionally filtered by domain). Each item includes \`archivedAt\` timestamp.
 
 ### Page interaction
 
@@ -278,7 +330,8 @@ If your code throws, the error message + stack trace are returned to you in the 
 ## Anti-patterns
 
 - ❌ Calling \`chrome.*\` directly — use \`modcrew.*\` instead. \`chrome.*\` may be available in scope but it's not part of the API contract and behavior may change.
-- ❌ Looking for a \`persist\` / \`temporary\` / \`preview\` flag — **there isn't one**. Every modcrew.injectCss / injectJs is saved (Tweeks model). User undoes via deleteMod, not by you opting out of saving.
+- ❌ Looking for a \`persist\` / \`temporary\` / \`preview\` flag — **there isn't one**. Every modcrew.injectCss / injectJs is saved + versioned. User undoes via revertTo or archiveMod, not by you opting out of saving.
+- ❌ When user iterates ("再深一点"), creating a NEW mod instead of passing \`opts.modId\`. Always listMods first, find the recent target, pass its id.
 - ❌ Whole-domain \`urlPattern\` when only some pages are meant — narrow patterns preferred.
 - ❌ Writing CSS without snapshotting first. \`body { background: X !important }\` loses to \`.card { background: white !important }\` (higher specificity). Read the page's actual selectors via snapshot, then override them with same specificity + !important.
 `;

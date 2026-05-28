@@ -18,14 +18,20 @@ const EXECUTE_DESCRIPTION = `Run JavaScript in the user's Chrome via the modcrew
 Quick reference (full docs via modcrew_search):
   modcrew.snapshot(tabId?)
   modcrew.findElement(intent, tabId?)
-  modcrew.injectCss(css, opts?)           opts: {tabId, urlPattern, intent}
+  modcrew.injectCss(css, opts?)           opts: {tabId, urlPattern, intent, modId}
   modcrew.injectJs(code, opts?)           same opts
   modcrew.screenshot(tabId?)
   modcrew.fetch(url, opts?)               GET-style cross-origin from SW
   modcrew.listTabs()
-  modcrew.listMods(domain?)
+  modcrew.listMods(domain?)                each item has versionCount, lastModifiedAt, recencyHint
   modcrew.toggleMod(id, enabled)
-  modcrew.deleteMod(id)
+  modcrew.deleteMod(id, opts?)             default soft (archive). opts.hard=true = permanent
+  // History (v1.7+)
+  modcrew.listVersions(modId)
+  modcrew.getVersion(modId, version)
+  modcrew.revertTo(modId, version)         appends new version with content from that version
+  modcrew.archiveMod(id) / restoreMod(id)
+  modcrew.listArchivedMods(domain?)
   // Page interaction (v1.4+)
   modcrew.click(selector, tabId?)
   modcrew.fill(selector, value, tabId?)
@@ -38,12 +44,17 @@ Quick reference (full docs via modcrew_search):
   modcrew.setValue(key, value)
   modcrew.deleteValue(key) / modcrew.listValues(prefix?)
 
-PERSISTENCE MODEL (read this carefully):
-- Every modcrew.injectCss / injectJs is **saved automatically** (Tweeks model).
-- There is **NO** persist / temporary / preview flag. Don't look for one.
-- If the user wants to undo: modcrew.listMods() + modcrew.deleteMod(id).
-- If the user wants to pause: modcrew.toggleMod(id, false).
-- The user can also manage from the extension popup Library.
+PERSISTENCE + VERSION MODEL (read this carefully):
+- Every modcrew.injectCss / injectJs is **saved + versioned**. There is NO persist/temporary/preview flag.
+- Iteration ("再深一点" / "再调一下" / "改一下刚才那个"):
+    1) const mods = await modcrew.listMods(domain);
+    2) const target = mods.find(m => m.recencyHint === 'last_session') || mods[0];
+    3) await modcrew.injectCss(newCss, { modId: target.id, intent: '...' });
+  → appends a new version on the same mod. Don't create a duplicate.
+- New different intent ("再加一个 X"): omit modId → new mod.
+- Undo: const vs = await modcrew.listVersions(modId); await modcrew.revertTo(modId, vs[1].version);
+- "Delete" defaults to soft delete (archive, recoverable). Only pass {hard:true} if user explicitly confirms permanent loss.
+- All these are visible to the user in the popup Library: version chain + Restore + Archived tab.
 
 WRITE STRATEGY (a 30%-vs-99% success-rate difference):
 - ALWAYS call modcrew.snapshot() first before writing any CSS — read the actual class names on the page. Don't guess.

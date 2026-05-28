@@ -1,23 +1,74 @@
-import { saveMod } from "../storage.js";
+import {
+  saveMod,
+  getModById,
+  appendModVersion,
+  createInitialModVersion,
+} from "../storage.js";
 
-// 每次 inject 都持久化保存（Tweeks 模式）。要撤销走 modcrew.deleteMod。
-export async function handleInjectCss(tabId, css, urlPattern, intent) {
+// inject CSS into a tab + persist as mod.
+// 两条路径：
+//   - 传 modId：在该 mod 上追加新 version (HEAD 推进), 内容跟现 HEAD 一致 → noop
+//   - 不传 modId：新建 mod + version 1
+export async function handleInjectCss(tabId, css, urlPattern, intent, modId) {
   await chrome.scripting.insertCSS({ target: { tabId }, css });
 
   const tab = await chrome.tabs.get(tabId);
   const url = new URL(tab.url);
   const pattern = urlPattern || `https://${url.hostname}/*`;
-  const modId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  // 路径 1: modId 提供 → update existing
+  if (modId) {
+    const mod = await getModById(modId);
+    if (!mod) throw new Error(`Mod ${modId} not found`);
+    if (mod.archivedAt) {
+      throw new Error(
+        `Mod ${modId} is archived. Call modcrew.restoreMod(${modId}) first.`
+      );
+    }
+    if (mod.type !== "css") {
+      throw new Error(`Mod ${modId} is type=${mod.type}, cannot update with CSS`);
+    }
+    // 字面去重：内容跟 HEAD 完全一样 → noop
+    if (mod.content === css && (urlPattern == null || mod.urlPattern === pattern)) {
+      return {
+        ok: true,
+        modId,
+        version: mod.currentVersion,
+        deduped: true,
+      };
+    }
+    const v = await appendModVersion({
+      modId,
+      content: css,
+      intent: intent || mod.intent,
+      urlPattern: pattern,
+      author: "mcp",
+    });
+    return { ok: true, modId, version: v.version };
+  }
+
+  // 路径 2: 无 modId → 新建 mod + v1
+  const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const now = Date.now();
   await saveMod({
-    id: modId,
+    id: newId,
     domain: url.hostname,
     urlPattern: pattern,
     intent: intent || "(inline)",
     type: "css",
     content: css,
     enabled: true,
-    createdAt: Date.now(),
+    currentVersion: 1,
+    archivedAt: null,
+    createdAt: now,
+    updatedAt: now,
   });
-
-  return { ok: true, modId };
+  await createInitialModVersion({
+    modId: newId,
+    content: css,
+    intent: intent || "(initial)",
+    urlPattern: pattern,
+    author: "mcp",
+  });
+  return { ok: true, modId: newId, version: 1 };
 }

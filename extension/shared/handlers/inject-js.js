@@ -1,16 +1,21 @@
-import { saveMod } from "../storage.js";
+import {
+  saveMod,
+  getModById,
+  appendModVersion,
+  createInitialModVersion,
+} from "../storage.js";
 import {
   isUserScriptsAvailable,
   registerModAsUserScript,
 } from "./user-scripts.js";
 
-// 每次 inject 都持久化保存（Tweeks 模式）。要撤销走 modcrew.deleteMod。
+// 两条路径（跟 inject-css 对齐）：
+//   - 传 modId: 该 mod 追加 version, HEAD 推进, 内容 same → noop
+//   - 不传 modId: 新建 mod + v1
 //
-// 双路径：
-//   1) chrome.scripting.executeScript({world:'MAIN'}) — 立即在当前 tab 跑（绕 CSP）
-//   2) 持久化：优先 chrome.userScripts.register（MV3 native, Chrome 120+, 需用户开 Allow User Scripts）
-//      不可用时降级靠 content/auto-apply.js 走 sw round-trip 重注（原 path）
-export async function handleInjectJs(tabId, code, urlPattern, intent) {
+// JS 还要走 chrome.userScripts.register 做持久化（MV3 native, Chrome 120+）。
+// 注意：update 时要先 unregister 再 re-register 用新 content。
+export async function handleInjectJs(tabId, code, urlPattern, intent, modId) {
   const wrapped = `(function(){try{${code}}catch(e){console.error('[modcrew] script error:',e);return {error:String(e)}}return {ok:true}})()`;
   let consoleOutput = "";
   try {
@@ -27,24 +32,69 @@ export async function handleInjectJs(tabId, code, urlPattern, intent) {
   const tab = await chrome.tabs.get(tabId);
   const url = new URL(tab.url);
   const pattern = urlPattern || `https://${url.hostname}/*`;
-  const modId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  if (modId) {
+    const mod = await getModById(modId);
+    if (!mod) throw new Error(`Mod ${modId} not found`);
+    if (mod.archivedAt) {
+      throw new Error(
+        `Mod ${modId} is archived. Call modcrew.restoreMod(${modId}) first.`
+      );
+    }
+    if (mod.type !== "js") {
+      throw new Error(`Mod ${modId} is type=${mod.type}, cannot update with JS`);
+    }
+    if (mod.content === code && (urlPattern == null || mod.urlPattern === pattern)) {
+      return { ok: true, modId, version: mod.currentVersion, deduped: true, consoleOutput };
+    }
+    const v = await appendModVersion({
+      modId,
+      content: code,
+      intent: intent || mod.intent,
+      urlPattern: pattern,
+      author: "mcp",
+    });
+    // 重注 userScript（带新 content）
+    if (mod.useUserScripts && isUserScriptsAvailable()) {
+      await registerModAsUserScript({ ...mod, content: code, urlPattern: pattern });
+    }
+    return { ok: true, modId, version: v.version, consoleOutput };
+  }
+
+  const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const now = Date.now();
   const mod = {
-    id: modId,
+    id: newId,
     domain: url.hostname,
     urlPattern: pattern,
     intent: intent || "(inline)",
     type: "js",
     content: code,
     enabled: true,
-    createdAt: Date.now(),
+    currentVersion: 1,
+    archivedAt: null,
+    createdAt: now,
+    updatedAt: now,
   };
 
-  // 试着用 chrome.userScripts 注册做持久化，成功就标记
   if (isUserScriptsAvailable()) {
     const ok = await registerModAsUserScript({ ...mod });
     if (ok) mod.useUserScripts = true;
   }
 
   await saveMod(mod);
-  return { ok: true, modId, consoleOutput, useUserScripts: mod.useUserScripts === true };
+  await createInitialModVersion({
+    modId: newId,
+    content: code,
+    intent: intent || "(initial)",
+    urlPattern: pattern,
+    author: "mcp",
+  });
+  return {
+    ok: true,
+    modId: newId,
+    version: 1,
+    consoleOutput,
+    useUserScripts: mod.useUserScripts === true,
+  };
 }

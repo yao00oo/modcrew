@@ -1,39 +1,42 @@
-import { deleteMod, getModById, matchesPattern } from "../storage.js";
+// Delete mod —— 默认 soft (archive)，opts.hard=true 才真删
+import {
+  deleteMod,
+  getModById,
+  matchesPattern,
+  deleteAllVersions,
+} from "../storage.js";
 import { unregisterModAsUserScript } from "./user-scripts.js";
+import { handleArchiveMod } from "./archive.js";
 
-// 删 mod。除了 storage，还要：
-//   - userScripts 注册过的 → 取消
-//   - CSS → 从匹配该 mod urlPattern 的开着的 tab 上 removeCSS（立刻还原视觉）
-export async function handleDeleteMod(id) {
+export async function handleDeleteMod(id, opts) {
   const mod = await getModById(id);
-  if (!mod) {
-    await deleteMod(id);
-    return { ok: true, id };
+  if (!mod) return { ok: true, id, notFound: true };
+  const hard = opts && opts.hard === true;
+
+  if (!hard) {
+    return handleArchiveMod(id);
   }
 
-  // userScripts 清理
+  // hard delete: 清 CSS + unregister userScript + 删 mod + 删所有 versions
   try {
-    if (mod.useUserScripts) {
-      await unregisterModAsUserScript(id);
-    }
+    if (mod.useUserScripts) await unregisterModAsUserScript(id);
   } catch (e) {
     console.warn("[modcrew] userScript unregister failed:", e);
   }
 
-  // CSS 从开着的 tab 上移除
   if (mod.type === "css" && mod.content) {
     const tabs = await chrome.tabs.query({});
     for (const tab of tabs) {
       if (!tab.id || !tab.url) continue;
-      let matches = false;
+      let m = false;
       try {
-        matches = mod.urlPattern
+        m = mod.urlPattern
           ? matchesPattern(tab.url, mod.urlPattern)
           : new URL(tab.url).hostname === mod.domain;
       } catch {
         continue;
       }
-      if (!matches) continue;
+      if (!m) continue;
       try {
         await chrome.scripting.removeCSS({
           target: { tabId: tab.id },
@@ -43,6 +46,7 @@ export async function handleDeleteMod(id) {
     }
   }
 
+  await deleteAllVersions(id).catch(() => {});
   await deleteMod(id);
-  return { ok: true, id };
+  return { ok: true, id, hardDeleted: true };
 }

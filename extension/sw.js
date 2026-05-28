@@ -80,6 +80,16 @@ import {
   handleDeleteValues,
   handleAddValueChangeListener,
 } from "./shared/handlers/kv.js";
+import {
+  handleListVersions,
+  handleGetVersion,
+  handleRevertTo,
+} from "./shared/handlers/versions.js";
+import {
+  handleArchiveMod,
+  handleRestoreMod,
+  handleListArchivedMods,
+} from "./shared/handlers/archive.js";
 
 const KEEPALIVE_MS = 20_000;
 
@@ -314,6 +324,9 @@ const READ_METHODS = new Set([
   "getValue",
   "listValues",
   "getLastPicked",
+  "listVersions",
+  "getVersion",
+  "listArchivedMods",
 ]);
 const WRITE_METHODS = new Set([
   "injectCss",
@@ -326,6 +339,9 @@ const WRITE_METHODS = new Set([
   "hover",
   "setValue",
   "deleteValue",
+  "revertTo",
+  "archiveMod",
+  "restoreMod",
 ]);
 
 async function getTabHostname(tabId) {
@@ -419,7 +435,8 @@ async function handleModcrewApiCall(method, args) {
           await resolveTabId(opts.tabId),
           css,
           opts.urlPattern,
-          opts.intent
+          opts.intent,
+          opts.modId
         );
         break;
       }
@@ -429,7 +446,8 @@ async function handleModcrewApiCall(method, args) {
           await resolveTabId(opts.tabId),
           code,
           opts.urlPattern,
-          opts.intent
+          opts.intent,
+          opts.modId
         );
         break;
       }
@@ -443,13 +461,31 @@ async function handleModcrewApiCall(method, args) {
         result = await handleListTabs();
         break;
       case "listMods":
-        result = await handleListMods(args[0]);
+        result = await handleListMods(args[0], args[1]);
         break;
       case "toggleMod":
         result = await handleToggleMod(args[0], args[1]);
         break;
       case "deleteMod":
-        result = await handleDeleteMod(args[0]);
+        result = await handleDeleteMod(args[0], args[1]);
+        break;
+      case "listVersions":
+        result = await handleListVersions(args[0]);
+        break;
+      case "getVersion":
+        result = await handleGetVersion(args[0], args[1]);
+        break;
+      case "revertTo":
+        result = await handleRevertTo(args[0], args[1]);
+        break;
+      case "archiveMod":
+        result = await handleArchiveMod(args[0]);
+        break;
+      case "restoreMod":
+        result = await handleRestoreMod(args[0]);
+        break;
+      case "listArchivedMods":
+        result = await handleListArchivedMods(args[0]);
         break;
       case "saveMod": {
         const mod = args[0] || {};
@@ -683,8 +719,29 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       await handleToggleMod(msg.id, msg.enabled);
       sendResponse({ ok: true });
     } else if (msg.type === "delete_mod") {
-      await handleDeleteMod(msg.id);
+      // popup 的 × = soft delete (archive)，shift+click = hard delete (popup 传 hard:true)
+      await handleDeleteMod(msg.id, { hard: msg.hard === true });
       sendResponse({ ok: true });
+    } else if (msg.type === "list_versions") {
+      const versions = await handleListVersions(msg.modId);
+      sendResponse(versions);
+    } else if (msg.type === "revert_to") {
+      try {
+        const r = await handleRevertTo(msg.modId, msg.version);
+        sendResponse({ ok: true, ...r });
+      } catch (e) {
+        sendResponse({ ok: false, error: e?.message ?? String(e) });
+      }
+    } else if (msg.type === "list_archived") {
+      const archived = await handleListArchivedMods(msg.domain);
+      sendResponse(archived);
+    } else if (msg.type === "restore_mod") {
+      try {
+        await handleRestoreMod(msg.id);
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e?.message ?? String(e) });
+      }
     } else if (msg.type === "set_api_base") {
       await chrome.storage.local.set({ apiBase: msg.apiBase });
       sendResponse({ ok: true });

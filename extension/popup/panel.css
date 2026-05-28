@@ -253,6 +253,93 @@ h1 { font-size: 18px; margin: 0; color: #7c3aed; flex-shrink: 0; }
   background: #fff;
 }
 .mod-row.disabled { opacity: 0.5; background: #fafafa; }
+.mod-row.archived { background: #f9f9fb; border-style: dashed; }
+.mod-row.archived .intent { color: #777; }
+.mod-head { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.version-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  padding: 1px 6px;
+  background: #f0f0f0;
+  border: 0;
+  border-radius: 3px;
+  color: #555;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.3px;
+}
+.version-badge:hover { background: #ede9fe; color: #7c3aed; }
+.version-badge.open { background: #ede9fe; color: #7c3aed; }
+
+.mod-history {
+  margin: 6px 0 0 28px;
+  padding: 6px 0;
+  border-left: 2px solid #ede9fe;
+  padding-left: 12px;
+  font-size: 11px;
+}
+.history-empty { color: #aaa; font-size: 10px; padding: 4px 0; }
+.history-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.history-row:last-child { border-bottom: 0; }
+.history-row.head { background: #faf5ff; padding: 4px 6px; margin: 0 -6px; border-radius: 4px; }
+.history-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid #c4b5fd;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+.history-dot.filled { background: #7c3aed; border-color: #7c3aed; }
+.history-meta { flex: 1; min-width: 0; }
+.history-line {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 10px;
+}
+.history-ver {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #7c3aed;
+  font-weight: 600;
+}
+.history-when { color: #999; }
+.history-tag {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.history-msg {
+  font-size: 11px;
+  color: #444;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-actions { flex-shrink: 0; }
+.history-actions .link-btn { font-size: 10px; padding: 2px 6px; }
+.history-head-label {
+  font-size: 9px;
+  color: #7c3aed;
+  background: #fff;
+  border: 1px solid #ddd6fe;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: ui-monospace, Menlo, monospace;
+}
+.restore { color: #7c3aed; font-weight: 700; font-size: 14px; }
+.delete-hard { color: #c33; font-size: 12px; }
 .mod-row .toggle { flex-shrink: 0; }
 .mod-row .toggle input { cursor: pointer; }
 
