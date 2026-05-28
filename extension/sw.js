@@ -679,10 +679,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       const mods = await getAllMods();
       sendResponse(mods);
     } else if (msg.type === "toggle_mod") {
-      await toggleMod(msg.id, msg.enabled);
+      // 走 handler 拿到完整副作用：userScripts 同步 + 已开 tab 上 CSS 立即生效/撤销
+      await handleToggleMod(msg.id, msg.enabled);
       sendResponse({ ok: true });
     } else if (msg.type === "delete_mod") {
-      await deleteMod(msg.id);
+      await handleDeleteMod(msg.id);
       sendResponse({ ok: true });
     } else if (msg.type === "set_api_base") {
       await chrome.storage.local.set({ apiBase: msg.apiBase });

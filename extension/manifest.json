@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "minimum_chrome_version": "120",
   "name": "ModCrew",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Mod the web. Together. AI-powered website modification via Claude Code.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAioZV/9EreP741vIU3AcJa0PI/QV5VwYHM2ywIntAJUinNR97OkX+s0PYV/i5nGHOY7+5v+EmaofG54T+80Y3x7v5E2RhxW6EjgFABODVagxbKvRinNohWkNhbmFYKJJA3D0G2Sq0EpAwE8NIQ+jeSkfriNUyNCGHv7jiZCIjHSjjFr69xXFacn92a6HYxyQ3zKr+Fmo9KdAH/fXw9zExJX6LYDaqacPGglFemq8xk+y+FkBE24JKYjOdI0LGodibGaSgVsxauFWAVUSPGTCSSGaegBxlFuOBxDbWfiDPwJSsqDToNbWkWdZt54OLHdXnIFrfK6q1gn8uJBOT92Ui9wIDAQAB",
   "permissions": [
