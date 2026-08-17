@@ -1,6 +1,7 @@
 # MCP Server 設計原則（活文檔）
 
-> **Last updated**: 2026-05-27
+> **Last updated**: 2026-08-17
+> **上游基准**: [MCP spec 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/changelog)(本文档已对照到此版本;巡检源清单见 [upstream-sources.md](./upstream-sources.md))
 > **Source of truth**: this file at `main` HEAD
 > **Use this how**: Before designing or modifying any MCP server, fetch the raw URL of this file. Don't cache, don't rely on training-data prior — the whole point is this file evolves.
 
@@ -64,6 +65,11 @@ Tokens / API keys / sessions 必须在你能控制的进程里生成并持有（
 ### 證據
 ModCrew V3.0 → V3.1 重寫，[commit `dfb3371`](https://github.com/yao00oo/modcrew/commit/dfb3371) 之前坏了多次。
 
+### 2026-07-28 spec 对 auth 的更替(结论不变,机制更新)
+- 客户端注册:OAuth Dynamic Client Registration(RFC7591)**被正式废弃**,改推 [Client ID Metadata Documents](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents)——新 server 别再建在 DCR 上
+- 客户端 **必须**校验 authorization response 里的 `iss`(RFC 9207),凭据按 issuer 隔离、不得跨 authorization server 复用([SEP-2468](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2468)/[SEP-2352](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2352))
+- P2 的核心主张(凭据在你能控制的进程里生成并持有)与新规范方向一致,不变
+
 ---
 
 ## P3: 不要修改 tools/list across versions
@@ -78,6 +84,17 @@ ModCrew V3.0 → V3.1 重寫，[commit `dfb3371`](https://github.com/yao00oo/mod
 
 ### 推论
 **遵守 P1 自动解决 P3**：search + execute 永远不变。
+
+### 2026-07-28 spec 把前提解决了一半(协议层已修,客户端层未验证)
+P3 的原始前提是"客户端缓存 tools/list 且感知不到变更"。2026-07-28 正式版在**协议层**给齐了工具:
+- `tools/list` 结果**必须**带 `ttlMs` + `cacheScope` 缓存新鲜度提示([SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549))
+- 新增 `subscriptions/listen`:客户端显式订阅 `toolsListChanged` 等变更通知(取代旧 GET stream,[SEP-2575](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2575))
+- 新增 `server/discover`:客户端可按需拉 server 能力
+
+但 **Claude Code 等客户端是否已实现这些**未验证(见开放问题)。在主流客户端跟进之前,P3 照旧执行。
+
+### 顺手的新官方背书
+spec 现在建议 `tools/list` 返回**确定性排序**,理由就是提高客户端缓存与 LLM prompt cache 命中率——不搞 Code Mode 的 server 至少把这条做了([changelog minor #3](https://modelcontextprotocol.io/specification/2026-07-28/changelog))。
 
 ---
 
@@ -102,6 +119,9 @@ ModCrew V3.0 → V3.1 重寫，[commit `dfb3371`](https://github.com/yao00oo/mod
 - Bug fix 用户无感知
 - 新功能用户无感知（结合 P1）
 - 你能改全用户的体验，他们不用 reinstall
+
+### 2026-07-28 spec 把这条变成了协议官方立场
+正式版把整个协议**无状态化**:删掉 session 与 `Mcp-Session-Id`、删掉 `initialize` 握手,协议版本/客户端能力随 `_meta` 每请求携带,server 可以用最普通的 round-robin 负载均衡水平扩([SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567)/[SEP-2575](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2575))。跨调用状态用 server 签发的 handle 当普通工具参数传。P5 从"我们的部署偏好"升级为"协议设计方向",照做即可。
 
 ---
 
@@ -143,11 +163,33 @@ P5 解决的是"MCP server 逻辑更新用户无感知"。但当产品需要把�
 
 ---
 
+## P8: 跟随 spec 生命周期 — 别建在已废弃特性上
+
+2026-07-28 起 spec 有了正式的[特性生命周期与废弃政策](https://modelcontextprotocol.io/community/feature-lifecycle)(Active/Deprecated/Removed,最短 12 个月废弃窗口)和[已废弃特性注册表](https://modelcontextprotocol.io/specification/2026-07-28/deprecated)。设计新 server 前查一眼注册表,当前已废弃、**新实现不要碰**的:
+
+| 已废弃 | 替代 |
+|---|---|
+| Roots | 目录/文件走工具参数、resource URI 或 server 配置 |
+| Sampling | 直接集成 LLM provider API |
+| Logging(`logging/setLevel` 等) | stdio 记 `stderr`,或 OpenTelemetry |
+| HTTP+SSE 传输 | Streamable HTTP |
+| OAuth DCR(RFC7591) | Client ID Metadata Documents(见 P2) |
+
+新版还带来两个此前不存在的官方形态,设计时优先选它们而不是自造:
+- **MRTR**(Multi Round-Trip Requests):server 需要客户端补充输入时,返回 `resultType: "input_required"`,客户端带 `inputResponses` 重试原请求——取代旧的 server 主动发起 `sampling/createMessage`/`elicitation/create`([SEP-2322](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2322))
+- **Tasks 官方扩展**(`io.modelcontextprotocol/tasks`):长时任务用轮询式 `tasks/get` + `tasks/update`,server 可主动返回 task handle([SEP-2663](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2663));通用扩展机制见 [extensions 框架](https://modelcontextprotocol.io/docs/extensions/overview)
+
+### 与本文档演进规则的呼应
+spec 的"废弃不删、注册表留痕、12 个月窗口"跟本文档"老原则被推翻加已废弃章节、git log 是演进史"是同一套方法论——上游用它管协议,我们用它管原则。
+
+---
+
 ## 开放问题（提 PR / 让用户改）
 
-- Claude Code 修了 `list_changed` 之后，P3 还要不要？
+- ~~Claude Code 修了 `list_changed` 之后，P3 还要不要？~~ → 2026-07-28 spec 已在协议层给齐(`subscriptions/listen` + `ttlMs`,见 P3 补记);问题收窄为:**Claude Code 何时实现新缓存/订阅语义**?实现并验证后,P3 可降级为"兼容旧客户端的建议"
 - Code Mode 的 sandbox 在 Chrome extension SW 怎么做（没有 V8 isolate 原语）
 - 多 MCP 之间能力组合（GitHub MCP + modcrew MCP 协作）的 best practice
+- 无状态化(P5 补记)后,P1 的 server-side JS 会话状态(sandbox 里的变量)如何与"跨调用状态用 server 签发 handle"对齐
 
 ---
 
@@ -165,3 +207,8 @@ P5 解决的是"MCP server 逻辑更新用户无感知"。但当产品需要把�
 - [Claude Code Issue #40025 — tool list cache bug](https://github.com/anthropics/claude-code/issues/40025)
 - [Claude Code Issue #13646 — list_changed unsupported](https://github.com/anthropics/claude-code/issues/13646)
 - [Claude Code Issue #17975 — tool caching feature request](https://github.com/anthropics/claude-code/issues/17975)
+- [MCP spec 2026-07-28 changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)(P2/P3/P5/P8 的 2026-08-17 补记来源)
+- [MCP 官方博客:The 2026-07-28 Specification](https://blog.modelcontextprotocol.io/posts/2026-07-28/)
+- [已废弃特性注册表](https://modelcontextprotocol.io/specification/2026-07-28/deprecated)
+- [Anthropic engineering: Code execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp)(P1 同方向的官方论证)
+- [Anthropic engineering: Advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use)
