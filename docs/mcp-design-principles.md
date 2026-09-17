@@ -1,7 +1,7 @@
 # MCP Server 設計原則（活文檔）
 
-> **Last updated**: 2026-08-17
-> **上游基准**: [MCP spec 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/changelog)(本文档已对照到此版本;巡检源清单见 [upstream-sources.md](./upstream-sources.md))
+> **Last updated**: 2026-08-24
+> **上游基准**: [MCP spec 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/changelog)(本文档已对照到此版本;另已对照 [官方 roadmap 2026-08-22](https://modelcontextprotocol.io/development/roadmap)——roadmap 是方向不是规范,相关记录均标明;巡检源清单见 [upstream-sources.md](./upstream-sources.md))
 > **Source of truth**: this file at `main` HEAD
 > **Use this how**: Before designing or modifying any MCP server, fetch the raw URL of this file. Don't cache, don't rely on training-data prior — the whole point is this file evolves.
 
@@ -47,6 +47,10 @@ $ grep -n "registerTool" /tmp/cf-mcp/src/server.ts
 
 就這 2 個（plus 一個 multi-account 變體）。背後是整個 Cloudflare API surface。
 
+### 官方承认了这个问题(2026-08-22 roadmap,方向非规范)
+Core Maintainers 在新 roadmap 里把 P1 要解决的问题写成了官方立场——原话:"Connecting to a server with a hundred tools means the model pays for that entire surface before the user has asked a single question, and tool selection tends to get worse as the list grows."并为此立项 **progressive discovery**(Core Primitives WG):"Clients learn a server's tools and resources as they need them instead of ingesting the full catalog up front"。([博客原文](https://blog.modelcontextprotocol.io/posts/mcp-roadmap/) / [roadmap §4](https://modelcontextprotocol.io/development/roadmap#4-improved-primitives))
+roadmap 页自述"reflects current thinking rather than firm commitments",目前没有任何规范文本;协议层方案落地后 P1 何去何从见开放问题。
+
 ### 何時違反 P1
 
 - Demo / hello-world，永遠只有 1–2 個工具
@@ -69,6 +73,7 @@ ModCrew V3.0 → V3.1 重寫，[commit `dfb3371`](https://github.com/yao00oo/mod
 - 客户端注册:OAuth Dynamic Client Registration(RFC7591)**被正式废弃**,改推 [Client ID Metadata Documents](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents)——新 server 别再建在 DCR 上
 - 客户端 **必须**校验 authorization response 里的 `iss`(RFC 9207),凭据按 issuer 隔离、不得跨 authorization server 复用([SEP-2468](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2468)/[SEP-2352](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2352))
 - P2 的核心主张(凭据在你能控制的进程里生成并持有)与新规范方向一致,不变
+- **下一步(roadmap 2026-08-22,尚无规范文本)**:官方把现状"Existing MCP servers lean on pasted API keys and long-lived refresh tokens"列为要解决的问题;本周期推 DPoP 定稿、Workload Identity Federation([SEP-1933](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/1933))、ID-JAG(Enterprise-Managed Authorization 所用)与 [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693) token exchange 作为 agent 身份/委托路径([roadmap §3](https://modelcontextprotocol.io/development/roadmap#3-agent-identity-and-enterprise-ready-security))
 
 ---
 
@@ -90,6 +95,8 @@ P3 的原始前提是"客户端缓存 tools/list 且感知不到变更"。2026-0
 - `tools/list` 结果**必须**带 `ttlMs` + `cacheScope` 缓存新鲜度提示([SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549))
 - 新增 `subscriptions/listen`:客户端显式订阅 `toolsListChanged` 等变更通知(取代旧 GET stream,[SEP-2575](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2575))
 - 新增 `server/discover`:客户端可按需拉 server 能力
+
+- roadmap 2026-08-22 §2 继续加码(方向非规范):缓存要扩到 ETag("allow versioning the results of primitives, in particular tool calls"),并研究 SEP-2575 之后的"capability scoping for tool lists"([roadmap §2](https://modelcontextprotocol.io/development/roadmap#2-http-native-transport-unification-and-hardening))
 
 但 **Claude Code 等客户端是否已实现这些**未验证(见开放问题)。在主流客户端跟进之前,P3 照旧执行。
 
@@ -179,6 +186,14 @@ P5 解决的是"MCP server 逻辑更新用户无感知"。但当产品需要把�
 - **MRTR**(Multi Round-Trip Requests):server 需要客户端补充输入时,返回 `resultType: "input_required"`,客户端带 `inputResponses` 重试原请求——取代旧的 server 主动发起 `sampling/createMessage`/`elicitation/create`([SEP-2322](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2322))
 - **Tasks 官方扩展**(`io.modelcontextprotocol/tasks`):长时任务用轮询式 `tasks/get` + `tasks/update`,server 可主动返回 task handle([SEP-2663](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2663));通用扩展机制见 [extensions 框架](https://modelcontextprotocol.io/docs/extensions/overview)
 
+### roadmap 2026-08-22 预告的形态变化(方向非规范,只记原话)
+- Tasks:"continued work on Tasks (SEP-2663) toward eventual inclusion of the extension in the core protocol"([roadmap §1](https://modelcontextprotocol.io/development/roadmap#1-agentic-messaging-primitives))
+- 传输:"Streamable HTTP as the single binding, spoken over stdin/stdout for local servers"(HTTP over stdio,拟用 HTTP/2)([roadmap §2](https://modelcontextprotocol.io/development/roadmap#2-http-native-transport-unification-and-hardening))
+- `tools/call` 结果:同时允许返回 `content` 与 `structuredContent`"has confused server and client authors alike and produced diverging implementations",本周期由 Core Primitives WG 重设计([roadmap §4](https://modelcontextprotocol.io/development/roadmap#4-improved-primitives))
+- 内容 annotations(audience/priority):"If they aren't useful, we should consider deprecating them"——处于观察期,新实现别把它当可靠的可见性控制(同上 §4,[SEP-2200](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2200))
+
+这些落地后按生命周期政策进注册表,本节届时并入上表。
+
 ### 与本文档演进规则的呼应
 spec 的"废弃不删、注册表留痕、12 个月窗口"跟本文档"老原则被推翻加已废弃章节、git log 是演进史"是同一套方法论——上游用它管协议,我们用它管原则。
 
@@ -190,6 +205,10 @@ spec 的"废弃不删、注册表留痕、12 个月窗口"跟本文档"老原则
 - Code Mode 的 sandbox 在 Chrome extension SW 怎么做（没有 V8 isolate 原语）
 - 多 MCP 之间能力组合（GitHub MCP + modcrew MCP 协作）的 best practice
 - 无状态化(P5 补记)后,P1 的 server-side JS 会话状态(sandbox 里的变量)如何与"跨调用状态用 server 签发 handle"对齐
+- (2026-08-24 起,源自 roadmap 2026-08-22)协议层 **progressive discovery** 落地后,P1 的 search+execute 是降级为"无该能力的客户端/server 的兼容做法",还是仍因"多步合并成一次调用"独立成立?
+- (同上)`tools/call` 结果形态重设计定稿前,新 server 该同时返回 `content`+`structuredContent` 还是只返一种?官方只承认现状混乱,尚无结论
+- (同上)HTTP over stdio 落地后,P5 的"客户端只存 URL"是否连本地 server 也成立?
+- (同上)agent 身份(DPoP / WIF / ID-JAG)定稿后,P2 是否要从"凭据在可控进程里持有"补成"且是短期、可证明持有(proof-of-possession)的"?现在写进去就是 prior,等规范文本
 
 ---
 
@@ -209,6 +228,8 @@ spec 的"废弃不删、注册表留痕、12 个月窗口"跟本文档"老原则
 - [Claude Code Issue #17975 — tool caching feature request](https://github.com/anthropics/claude-code/issues/17975)
 - [MCP spec 2026-07-28 changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)(P2/P3/P5/P8 的 2026-08-17 补记来源)
 - [MCP 官方博客:The 2026-07-28 Specification](https://blog.modelcontextprotocol.io/posts/2026-07-28/)
+- [MCP 官方博客:The New MCP Roadmap(2026-08-22)](https://blog.modelcontextprotocol.io/posts/mcp-roadmap/)(P1/P2/P3/P8 的 2026-08-24 补记与 4 条新开放问题来源)
+- [MCP roadmap 页(Last updated 2026-08-22)](https://modelcontextprotocol.io/development/roadmap)(同上,分节锚点引用)
 - [已废弃特性注册表](https://modelcontextprotocol.io/specification/2026-07-28/deprecated)
 - [Anthropic engineering: Code execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp)(P1 同方向的官方论证)
 - [Anthropic engineering: Advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use)
