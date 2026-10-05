@@ -4,6 +4,12 @@
 
 ---
 
+- 2026-10-05 巡檢:**1 CHANGED / 0 FETCH-FAIL,判定誤報,原則文檔不動**(5 源全檢,基線 09:17 全數刷新核實非靜默失敗;spec 最新 tag 仍為 2026-07-28,mcp-blog 最新仍為 08-22 roadmap 篇,anthropic-eng / cf-mcp 無變化)。
+  - `spec-deprecated-registry(2026-07-28)` hash `06548b…` → `ae898c…`。逐行比對後**正文零變更**,只是頁面 .md 導出的表格格式變了(分隔行 `| ---- |` 變 `| - |`、列內填充空格去掉),歸一化後內容完全相同。證據:① 上游源文件 [docs/specification/2026-07-28/deprecated.mdx](https://github.com/modelcontextprotocol/modelcontextprotocol/commits/main/docs/specification/2026-07-28/deprecated.mdx) 最後一次提交仍是 2026-07-28(`0cb6c6a3`);② [Wayback 2026-09-10 快照](http://web.archive.org/web/20260910002159/https://modelcontextprotocol.io/specification/2026-07-28/deprecated.md)按腳本同一算法復算 hash = 舊基線 `06548b…`,與今日實抓 diff 僅表格格式行。6 條已廢棄特性(Roots / Sampling / Logging / Dynamic Client Registration / `includeContext` / HTTP+SSE)與 P8 表、P2 DCR 段一致,Removed 區仍為空,無需修訂。
+  - backlog 本輪條目已清。上輪 [PR #2](https://github.com/yao00oo/modcrew/pull/2) 經 `gh pr view` 核實仍 OPEN(已開 6 週,0 評論),無新內容不重複通知。通知:未發(無新 PR、無 FETCH-FAIL)。
+  - 提請(未動手,鐵律①):`check_updates.sh` 第 2 段 hash 前應把表格分隔行的連續 `-` 歸一(如 `re.sub(r'-{2,}','-',t)`)並去掉 `|` 兩側填充空格,否則渲染器改格式就誤報;同類風險在 Mintlify 加的「Documentation Index」前導塊(建議從首個 `# ` 標題起算 hash)。
+  - 旁證(非登記源,不算核驗):上游 repo 09-14→09-28 的 docs 提交全為社區 / 工作組 / 連結修復類(Skills Over MCP WG、Infrastructure WG charter、SEP 頁 redirect),未觸及 spec 正文。
+
 - 2026-09-28 巡檢:無變更(5 源全檢,0 CHANGED / 0 FETCH-FAIL;基線 09:17 全數刷新核實非靜默失敗,spec 最新 tag 仍為 2026-07-28,spec-deprecated(2026-07-28)hash 未變,mcp-blog 最新仍為 08-22 roadmap 篇)。本輪實際覆蓋 09-14 → 09-28 兩週窗口(見下條)。backlog 無遺留。上輪 [PR #2](https://github.com/yao00oo/modcrew/pull/2) 經 `gh pr list` 核實仍 OPEN 待審(已開 5 週),無新內容不重複通知。
 
 - 2026-09-21 巡檢:**未執行**(補記)。機器 09:17 在合蓋休眠,09:27 醒來後 launchd 補跑,但 fable / opus / sonnet 三檔在啟動階段全部報「OAuth session expired and could not be refreshed」(登入態過期,非額度),11:09 整鏈 status=1 結束,`check_updates.sh` 未跑、基線未刷新、台帳未記。證據:`~/Project/_scheduled/logs/mcp-patrol-2026-09-21.log`。09-14 輪也曾遇同類 401(token revoked)但重試後成功。提請(未動手):run-claude-job.sh 把鑑權失敗當「撞上限」逐檔降級再等,三檔白等 1 小時 42 分;鑑權類錯誤應直接短路並走 job-alert 紅卡,屬運行器層問題,不在本 repo。
