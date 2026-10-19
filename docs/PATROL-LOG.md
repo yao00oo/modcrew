@@ -4,6 +4,11 @@
 
 ---
 
+- 2026-10-19 巡檢:**1 CHANGED / 0 FETCH-FAIL,已閱後判定與 P1/P4/P6 無關,原則文檔不動**(5 源全檢;spec 最新 tag 仍為 2026-07-28;spec-deprecated(2026-07-28)hash 仍為 `ae898c…`;MCP 官方博客、Cloudflare MCP tag 無變化)。
+  - `anthropic-engineering` 新增 [Redesigning source control at Anthropic](https://www.anthropic.com/engineering/redesigning-source-control)(2026-10-13 發布,10-15 更新)。原文講 Anthropic 為高併發 agent / CI 工作負載重做集中式源碼管理 Scion,重點是在線客戶端、client-server asymmetry、稀疏工作副本、server-side source control API 與水平擴展;未涉及 MCP 工具入口/Code Mode(P1)、tool description(P4)或工具粒度與 agent 意圖(P6),不構成原則正文修訂證據。→ 已閱,無關。
+  - backlog 本輪條目已清。[PR #2](https://github.com/yao00oo/modcrew/pull/2) 經 `gh pr view` 核實仍 OPEN 待審(0 評論、0 review),無新內容不重複起草或通知。
+  - 通知:未發(無新 PR、無連續兩輪 FETCH-FAIL)。
+
 - 2026-10-12 巡檢:無變更(5 源全檢,0 CHANGED / 0 FETCH-FAIL;基線 09:17 全數刷新核實非靜默失敗,spec 最新 tag 仍為 2026-07-28,spec-deprecated(2026-07-28)hash `ae898c…` 與上輪一致,mcp-blog 最新仍為 08-22 roadmap 篇,anthropic-eng / cf-mcp 無變化)。backlog 無遺留。上輪 [PR #2](https://github.com/yao00oo/modcrew/pull/2) 經 `gh pr list` 核實仍 OPEN 待審(已開 7 週,0 評論),無新內容不重複通知。通知:未發(無新 PR、無 FETCH-FAIL)。上輪對 `check_updates.sh` 表格歸一化的提請仍未處理,待主人批示。
 
 - 2026-10-05 巡檢:**1 CHANGED / 0 FETCH-FAIL,判定誤報,原則文檔不動**(5 源全檢,基線 09:17 全數刷新核實非靜默失敗;spec 最新 tag 仍為 2026-07-28,mcp-blog 最新仍為 08-22 roadmap 篇,anthropic-eng / cf-mcp 無變化)。
