@@ -4,6 +4,14 @@
 
 ---
 
+- 2026-10-26 巡檢:**1 CHANGED / 1 FETCH-FAIL，原則正文無需修訂，檢測工具缺陷留待批准**(5 源均已嘗試檢測；`bash ~/Project/mcp-doctrine/check_updates.sh` exit 0，故不能僅憑退出碼認定全數成功)。執行前 `git checkout main && git pull --ff-only` 成功、工作區乾淨；backlog 無歷史遺留。
+  - 各源結果：spec-releases 無變化(最新 tag 仍 `2026-07-28`)；spec-deprecated-registry(2026-07-28) **CHANGED**；MCP 官方博客無變化；Anthropic engineering **FETCH-FAIL**；Cloudflare MCP tag 無變化。三個無變化源的本輪基線與執行前快照逐位元比對相同；四個成功源基線本輪已刷新，Anthropic 舊基線保留。
+  - CHANGED 結論：已閱，**導出格式變動，非原則變更**。廢棄登記頁 hash `ae898cdfe5b5a226` → `add54d8fcf0479d9`；[本輪純文字頁](https://modelcontextprotocol.io/specification/2026-07-28/deprecated.md)的站內連結帶 `.md`。逐項核對 6 條 Deprecated 與空的 Removed 區，內容及替代方案均與 P2/P8 相容。[上游原始檔](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/deprecated.mdx)最後提交仍為 [2026-07-28 / 0cb6c6a3](https://github.com/modelcontextprotocol/modelcontextprotocol/commit/0cb6c6a31768cbb16129b35e6b569a31fecfe1b6)。Python 去掉 frontmatter／導覽前綴、統一站內連結 `.md`、表格分隔與空白及 Markdown 強調符號後，實抓正文與原始檔比較結果 `CANONICAL_CONTENT_EQUAL True`。處理結案，清除此輪 backlog 條目。
+  - FETCH-FAIL 根因：人工重抓 [Anthropic engineering](https://www.anthropic.com/engineering)得 HTTP 200、392612 bytes；HTML 文章連結已由 `/engineering/<slug>` 換為 `/research/<slug>`，而 `check_updates.sh` 第 4 段只匹配舊路徑，結果為空。頁面最新文章仍為 2026-10-13 的 [Redesigning source control at Anthropic](https://www.anthropic.com/research/redesigning-source-control)，已於上輪閱讀判定無關；本輪人工補查未發現更新文章。**保留原始 FETCH-FAIL 統計**，這是本源首次連續失敗(上輪 0 FETCH-FAIL)，下輪若仍失敗即達通知門檻。
+  - 工具修正提請(本輪未改工具、未替換基線)：① 文章偵測應同時解析 `/engineering/` 與 `/research/`，以文章 slug 作穩定識別、排除 `/research/team/` 分類連結，避免改路徑後整批假新增；驗收至少覆蓋舊／新路徑、大小寫 slug 與分類排除。② 延續 10-05 提請，廢棄登記頁應使用正文語義歸一化或追蹤原始檔，避免導覽、表格和 `.md` 連結格式觸發假變更；驗收同時要求格式變動不報警、真實廢棄條目／遷移方案變動仍報警。以上待主人批准後另起修正，禁止本輪擅改。
+  - 歷史修訂 [PR #2](https://github.com/yao00oo/modcrew/pull/2) 經 `gh pr list --repo yao00oo/modcrew --state open` 及 `gh pr view 2` 核實仍 OPEN、0 評論／0 review、最後更新 2026-08-24，無新內容，不重複起草或通知。本輪無新 PR；`mcp-design-principles.md`、`upstream-sources.md`、SPEC_VERSION 均不改。
+  - 通知：未發(無新 PR，FETCH-FAIL 未連續兩輪；舊 PR 已通知且無新增內容)。本輪僅提交巡檢台帳至 main，不合併任何 PR。核驗快照及抓取回應留於本機 `/tmp/mcp-patrol-2026-10-26/`；偵測腳本 SHA-256 保持 `9e4eb87ba3de5759395742d81b68f4532107762b872ca16b36a463ebb735015b`。
+
 - 2026-10-19 巡檢:**1 CHANGED / 0 FETCH-FAIL,已閱後判定與 P1/P4/P6 無關,原則文檔不動**(5 源全檢;spec 最新 tag 仍為 2026-07-28;spec-deprecated(2026-07-28)hash 仍為 `ae898c…`;MCP 官方博客、Cloudflare MCP tag 無變化)。
   - `anthropic-engineering` 新增 [Redesigning source control at Anthropic](https://www.anthropic.com/engineering/redesigning-source-control)(2026-10-13 發布,10-15 更新)。原文講 Anthropic 為高併發 agent / CI 工作負載重做集中式源碼管理 Scion,重點是在線客戶端、client-server asymmetry、稀疏工作副本、server-side source control API 與水平擴展;未涉及 MCP 工具入口/Code Mode(P1)、tool description(P4)或工具粒度與 agent 意圖(P6),不構成原則正文修訂證據。→ 已閱,無關。
   - backlog 本輪條目已清。[PR #2](https://github.com/yao00oo/modcrew/pull/2) 經 `gh pr view` 核實仍 OPEN 待審(0 評論、0 review),無新內容不重複起草或通知。
