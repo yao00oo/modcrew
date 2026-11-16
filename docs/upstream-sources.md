@@ -11,12 +11,14 @@ SPEC_VERSION: 2026-07-28
 
 | # | 源 | 檢測方式(key) | 對應原則 | 上次核驗 |
 |---|---|---|---|---|
-| 1 | [spec GitHub releases](https://github.com/modelcontextprotocol/modelcontextprotocol/releases) | release tag 比對(`spec-release`) | 全部 | 2026-08-17 |
-| 2 | [spec changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)(隨 #1 出新版才讀) | 不獨立檢測,#1 報警後人讀 | P2 P3 P5 | 2026-08-17 |
-| 3 | [spec 已廢棄特性註冊表](https://modelcontextprotocol.io/specification/2026-07-28/deprecated) | `.md` 純文本 hash(`spec-deprecated`) | 「已廢棄」區 · P8 | 2026-08-17 |
-| 4 | [MCP 官方博客](https://blog.modelcontextprotocol.io/) | RSS 文章列表比對(`mcp-blog`) | 全部 | 2026-08-17 |
-| 5 | [Anthropic engineering](https://www.anthropic.com/engineering) | 文章 slug 集合比對(`anthropic-eng`) | P1 P4 P6 | 2026-08-17 |
-| 6 | [Cloudflare blog · MCP tag](https://blog.cloudflare.com/tag/mcp/) | RSS 文章列表比對(`cf-mcp`) | P1 | 2026-08-17 |
+| 1 | [spec GitHub releases](https://github.com/modelcontextprotocol/modelcontextprotocol/releases) | release tag 比對(`spec-release`) | 全部 | 2026-11-16 |
+| 2 | [spec changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)(隨 #1 出新版才讀) | 不獨立檢測,#1 報警後人讀 | P2 P3 P5 | 2026-11-16(補讀現版) |
+| 3 | [spec 已廢棄特性註冊表](https://modelcontextprotocol.io/specification/2026-07-28/deprecated) | `.md` 純文本 hash(`spec-deprecated`) | 「已廢棄」區 · P8 | 2026-11-16 |
+| 4 | [MCP 官方博客](https://blog.modelcontextprotocol.io/) | RSS 文章列表比對(`mcp-blog`) | 全部 | 2026-11-16 |
+| 5 | [Anthropic engineering](https://www.anthropic.com/engineering) | 文章 slug 集合比對(`anthropic-eng`) | P1 P4 P6 | 2026-11-16(自動失敗,人工補讀) |
+| 6 | [Cloudflare blog · MCP tag](https://blog.cloudflare.com/tag/mcp/) | RSS 文章列表比對(`cf-mcp`) | P1 | 2026-11-16 |
+
+> 本表共 6 項,其中 5 個自動檢測源、1 個聯動人工閱讀項。本輪 #5 舊路徑正則匹配為空,保留 FETCH-FAIL;人工補查不代表檢測器已修好。工具修正提請見 PATROL-LOG。
 
 ## 原則 ↔ 證據源映射(源報警時複核哪幾條)
 
@@ -29,6 +31,7 @@ SPEC_VERSION: 2026-07-28
 | P5 中央化部署 | spec 核心協議(stateless 化) | |
 | P6 少而靈活 | Anthropic engineering | |
 | P7 客戶端側內容分發 | **無上游** | 自家 botook-heartbeat 實戰產物,由自家實戰驅動更新 |
+| P8 spec 生命週期與發布流程 | spec 已廢棄特性註冊表、MCP 官方博客及其連結的 SEP | [SEP-3398](https://modelcontextprotocol.io/seps/3398-release-cycle-updates)與[發布公告](https://blog.modelcontextprotocol.io/posts/mcp-release-cycle/)補發布節奏;[文件傳輸草案](https://blog.modelcontextprotocol.io/posts/exploring-file-uploads-and-downloads-in-mcp/)僅列開放問題,也涉及 P1/P2/P3/P5 |
 
 ## 維護規則
 

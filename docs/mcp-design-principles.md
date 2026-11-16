@@ -1,7 +1,7 @@
 # MCP Server 設計原則（活文檔）
 
-> **Last updated**: 2026-08-17
-> **上游基准**: [MCP spec 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/changelog)(本文档已对照到此版本;巡检源清单见 [upstream-sources.md](./upstream-sources.md))
+> **Last updated**: 2026-11-16
+> **上游基准**: [MCP spec 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/changelog)(正式协议基准不变;2026-11-16 补核 [SEP-3398 发布流程](https://modelcontextprotocol.io/seps/3398-release-cycle-updates),文件传输草案仅列开放问题;巡检源清单见 [upstream-sources.md](./upstream-sources.md))
 > **Source of truth**: this file at `main` HEAD
 > **Use this how**: Before designing or modifying any MCP server, fetch the raw URL of this file. Don't cache, don't rely on training-data prior — the whole point is this file evolves.
 
@@ -182,6 +182,12 @@ P5 解决的是"MCP server 逻辑更新用户无感知"。但当产品需要把�
 ### 与本文档演进规则的呼应
 spec 的"废弃不删、注册表留痕、12 个月窗口"跟本文档"老原则被推翻加已废弃章节、git log 是演进史"是同一套方法论——上游用它管协议,我们用它管原则。
 
+### 2026-11-16 发布流程补记(未发布新协议版本)
+
+- [SEP-3398](https://modelcontextprotocol.io/seps/3398-release-cycle-updates)(Accepted / Process)与 [11-11 官方公告](https://blog.modelcontextprotocol.io/posts/mcp-release-cycle/)公布半年一轮的发布安排,通常在三月、九月最后一个星期二发布;下一版目标为 **2027-03-30**,仍是计划日期。
+- 纳入规范发布的提案须在发布前 2.5 个月的 soft freeze 前达到 **Final 且已合并**;仅 Accepted 不够。Tier 1 SDK beta 目标为发布前 1.5 个月,hard freeze 为前 1 个月。扩展仍有各自的发布生命周期([SEP-3398](https://modelcontextprotocol.io/seps/3398-release-cycle-updates))。
+- 此次调整只涉及发布流程,不改变协议消息或版本协商,不要求已部署客户端或 server 随公告迁移([官方公告](https://blog.modelcontextprotocol.io/posts/mcp-release-cycle/))。
+
 ---
 
 ## 开放问题（提 PR / 让用户改）
@@ -190,6 +196,7 @@ spec 的"废弃不删、注册表留痕、12 个月窗口"跟本文档"老原则
 - Code Mode 的 sandbox 在 Chrome extension SW 怎么做（没有 V8 isolate 原语）
 - 多 MCP 之间能力组合（GitHub MCP + modcrew MCP 协作）的 best practice
 - 无状态化(P5 补记)后,P1 的 server-side JS 会话状态(sandbox 里的变量)如何与"跨调用状态用 server 签发 handle"对齐
+- **文件传输与 Code Mode 的兼容性(P1/P2/P3/P5/P8)**: [11-10 官方介绍](https://blog.modelcontextprotocol.io/posts/exploring-file-uploads-and-downloads-in-mcp/)中的 `io.modelcontextprotocol/files` 仍是可选实验草案,尚无参考实现。[已核验草案的 Open Questions #2](https://github.com/modelcontextprotocol/experimental-ext-file-uploads/blob/8a859b8f268926fe4beb84d78565e7cc6f9fa617/specification/draft/file-uploads.md#open-questions)明确指出通用执行工具会隐藏内层 `x-mcp-file` 参数。我们的 search + execute 如何保留客户端文件绑定、处理不支持该扩展的客户端,并对齐凭据目标隔离与 `requestState`?这是待实测的问题,**不据此推翻 P1/P3,也不把草案机制升级为默认原则**;目标白名单和下载结果形态也仍是上游开放问题。
 
 ---
 
@@ -212,3 +219,7 @@ spec 的"废弃不删、注册表留痕、12 个月窗口"跟本文档"老原则
 - [已废弃特性注册表](https://modelcontextprotocol.io/specification/2026-07-28/deprecated)
 - [Anthropic engineering: Code execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp)(P1 同方向的官方论证)
 - [Anthropic engineering: Advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use)
+- [SEP-3398: Release Cycle Updates](https://modelcontextprotocol.io/seps/3398-release-cycle-updates)(P8 发布流程补记;Accepted / Process)
+- [MCP 官方博客: A More Predictable Release Cycle for MCP](https://blog.modelcontextprotocol.io/posts/mcp-release-cycle/)(2026-11-11)
+- [MCP 官方博客: Exploring File Uploads and Downloads in MCP](https://blog.modelcontextprotocol.io/posts/exploring-file-uploads-and-downloads-in-mcp/)(2026-11-10;实验草案,仅列开放问题)
+- [文件传输草案: 已核验版本](https://github.com/modelcontextprotocol/experimental-ext-file-uploads/blob/8a859b8f268926fe4beb84d78565e7cc6f9fa617/specification/draft/file-uploads.md)(2026-11-09 commit;Draft)
