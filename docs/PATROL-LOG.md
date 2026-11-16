@@ -4,6 +4,8 @@
 
 ---
 
+- 2026-11-16 下午恢复补记：修复通知类别登记并补报，正式消息 om_x100b60996038c0a4b4fc6bed2612d79 已回读。文章检测改为兼容 /engineering/ 与 /research/、按slug归一并保留大小写、排除team目录；实抓24篇，4增5移与今早人工补查一致，已阅结论不变，不新开PR、不合并待审修订。公开页面抓取不再计失败；代码回归同时覆盖空页面失败保留基线。
+
 - 2026-11-16 巡檢:**1 CHANGED / 1 FETCH-FAIL；已開 [PR #3](https://github.com/yao00oo/modcrew/pull/3) 待主人審閱，未通知成功，下輪補發**。5 個自動源均已嘗試，另補讀現版 changelog(源索引共 6 項)；歷史 backlog 為空。工作區乾淨，`git checkout main && git pull --ff-only` 成功，判斷基於最新 main `d01a7070`；指定檢測命令 exit 0，保留實際失敗結果，不當作全數成功。
   - 各源結果：spec-releases 無變化(最新正式 tag `2026-07-28`)；spec-deprecated-registry(2026-07-28) 無變化(`add54d8fcf0479d9`)；MCP 官方博客 **CHANGED**(新增兩篇)；Anthropic engineering **FETCH-FAIL**；Cloudflare MCP tag 無變化。三個無變化源與執行前基線逐位元相同；Anthropic 舊基線亦未替換。已補讀 [changelog.md](https://modelcontextprotocol.io/specification/2026-07-28/changelog.md)與 [deprecated.md](https://modelcontextprotocol.io/specification/2026-07-28/deprecated.md)，正式協議與 SPEC_VERSION 維持 `2026-07-28`。
   - CHANGED ①：[A More Predictable Release Cycle for MCP](https://blog.modelcontextprotocol.io/posts/mcp-release-cycle/)(2026-11-11)已閱，並拉取 [SEP-3398 純文字原文](https://modelcontextprotocol.io/seps/3398-release-cycle-updates.md)。觸及 P8：半年發布、下一版目標 `2027-03-30`、soft freeze 前須 Final 且合併、SDK beta / hard freeze 節點與擴展獨立生命周期。只補發布流程，明確計劃日期及不改現有協議；**建議批**，上游有明確依據，沒有把計劃當已發布版本。
