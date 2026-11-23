@@ -4,6 +4,15 @@
 
 ---
 
+- 2026-11-23 巡檢:**1 CHANGED / 0 FETCH-FAIL；判定為渲染格式變更（誤報），原則正文不動，無新 PR、未通知**。5 個自動源全數嘗試；執行前工作區乾淨，`git checkout main && git pull --ff-only` 成功，判斷基於最新 main `57f9fdb`；`bash ~/Project/mcp-doctrine/check_updates.sh` exit 0。
+  - 各源結果：spec-releases 無變化（最新正式 tag `2026-07-28`）；spec-deprecated-registry（2026-07-28）**CHANGED**（`add54d8fcf0479d9` → `890b00bcf53bee4e`）；MCP 官方博客無變化；Anthropic engineering 無變化（24 篇 slug；改用 `/engineering`＋`/research` 兼容抽取後首次全綠）；Cloudflare MCP tag 無變化。4 個無變化源的基線本輪刷新時間均為 09:17，非靜默失敗；Anthropic 基線亦正常刷新。
+  - CHANGED 結論：**已閱，僅 Mintlify 導出格式變動，正文零變更，無需修訂**。證據三層：① 上游原始檔 [deprecated.mdx](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/deprecated.mdx) 在該路徑下最後一次提交仍是 [2026-07-28 `0cb6c6a3`](https://github.com/modelcontextprotocol/modelcontextprotocol/commit/0cb6c6a31768cbb16129b35e6b569a31fecfe1b6)，此後無內容提交，故 `add54d8…` → `890b00…` 的差異只可能來自導出層；② 與 [Wayback 2026-09-10 快照](https://web.archive.org/web/20260910002159/https://modelcontextprotocol.io/specification/2026-07-28/deprecated.md)對照今日[實抓頁](https://modelcontextprotocol.io/specification/2026-07-28/deprecated.md)：快照按同一算法 hash 為 `06548b…`（更早的基線），去掉導覽前綴、`<div>`、表格分隔行、Mintlify 頁腳並把站內連結歸一化為路徑後，兩份正文**逐字相同**；③ 實測差異只有四類：站內連結改為絕對 URL 並帶 `.md`、`<div id="enable-section-numbers" />` 消失、表格分隔行 `---` 縮成 `-`、頁尾新增 Mintlify 署名。6 條已廢棄條目（Roots / Sampling / Logging / Dynamic Client Registration / `includeContext` / HTTP+SSE）與空的 Removed 區均與 P2／P8 既有記述一致，沒有新廢棄項、沒有提前移除。
+  - 原則與源索引：不修改 `mcp-design-principles.md`、`upstream-sources.md`；Last updated、上游基準、SPEC_VERSION 均維持 `2026-07-28`。本輪不開 PR、不合併任何 PR。
+  - 工具提請（未動手）：本輪再次由同一類「渲染格式觸發 hash 變更」誤報，印證 10-05／10-26 已提出的歸一化提請仍未落實。建議在 `check_updates.sh` 第 2 段 hash 前：從首個 `# ` 標題起算、去掉 `<div>` 與頁尾署名、把表格分隔行連續 `-` 歸一、站內連結統一為路徑並去 `.md`；驗收要求格式變動不報警、真實廢棄條目或遷移方案變動仍報警。本輪未改工具；`check_updates.sh` SHA-256 現為 `bfcd380e…`（此值已包含 11-16 記錄過的文章抽取修復，本輪未再改動，mtime 仍為 11-16 17:56）。
+  - 歷史 PR：[PR #3](https://github.com/yao00oo/modcrew/pull/3) 經 `gh pr list --repo yao00oo/modcrew --state open` 及 `gh pr view 3` 核實仍 **OPEN**、base main、MERGEABLE、0 評論／0 review、最後更新 11-16；內容為 11-16 的發布週期與文件傳輸草案，無新內容，不重複起草、不重複通知。[PR #2](https://github.com/yao00oo/modcrew/pull/2) 亦仍 OPEN、0 評論／0 review、最後更新 08-24。沒有合併任何 PR。
+  - 通知：**未發**。本輪無新 PR、FETCH-FAIL 連續輪次為 0；PR #3 已於 11-16 補發至正式日報巡檢群並原生回讀（消息 id `om_x100b60996038c0a4b4fc6bed2612d79`），無新內容不重複打擾。
+  - 收尾：只把本台帳提交 main。backlog 刪除本輪 CHANGED 行，保留 PR #3 跟蹤行；臨時抓取檔 `/tmp/mcp-deprecated.md`、`/tmp/deprecated-20260910.md`、`/tmp/deprecated-raw.mdx` 於核驗後刪除。
+
 - 2026-11-16 下午恢复补记：修复通知类别登记并补报，正式消息 om_x100b60996038c0a4b4fc6bed2612d79 已回读。文章检测改为兼容 /engineering/ 与 /research/、按slug归一并保留大小写、排除team目录；实抓24篇，4增5移与今早人工补查一致，已阅结论不变，不新开PR、不合并待审修订。公开页面抓取不再计失败；代码回归同时覆盖空页面失败保留基线。
 
 - 2026-11-16 巡檢:**1 CHANGED / 1 FETCH-FAIL；已開 [PR #3](https://github.com/yao00oo/modcrew/pull/3) 待主人審閱，未通知成功，下輪補發**。5 個自動源均已嘗試，另補讀現版 changelog(源索引共 6 項)；歷史 backlog 為空。工作區乾淨，`git checkout main && git pull --ff-only` 成功，判斷基於最新 main `d01a7070`；指定檢測命令 exit 0，保留實際失敗結果，不當作全數成功。
