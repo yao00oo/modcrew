@@ -11,12 +11,12 @@ SPEC_VERSION: 2026-07-28
 
 | # | 源 | 檢測方式(key) | 對應原則 | 上次核驗 |
 |---|---|---|---|---|
-| 1 | [spec GitHub releases](https://github.com/modelcontextprotocol/modelcontextprotocol/releases) | release tag 比對(`spec-release`) | 全部 | 2026-08-17 |
+| 1 | [spec GitHub releases](https://github.com/modelcontextprotocol/modelcontextprotocol/releases) | release tag 比對(`spec-release`) | 全部 | 2026-08-24 |
 | 2 | [spec changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)(隨 #1 出新版才讀) | 不獨立檢測,#1 報警後人讀 | P2 P3 P5 | 2026-08-17 |
-| 3 | [spec 已廢棄特性註冊表](https://modelcontextprotocol.io/specification/2026-07-28/deprecated) | `.md` 純文本 hash(`spec-deprecated`) | 「已廢棄」區 · P8 | 2026-08-17 |
-| 4 | [MCP 官方博客](https://blog.modelcontextprotocol.io/) | RSS 文章列表比對(`mcp-blog`) | 全部 | 2026-08-17 |
-| 5 | [Anthropic engineering](https://www.anthropic.com/engineering) | 文章 slug 集合比對(`anthropic-eng`) | P1 P4 P6 | 2026-08-17 |
-| 6 | [Cloudflare blog · MCP tag](https://blog.cloudflare.com/tag/mcp/) | RSS 文章列表比對(`cf-mcp`) | P1 | 2026-08-17 |
+| 3 | [spec 已廢棄特性註冊表](https://modelcontextprotocol.io/specification/2026-07-28/deprecated) | `.md` 純文本 hash(`spec-deprecated`) | 「已廢棄」區 · P8 | 2026-08-24 |
+| 4 | [MCP 官方博客](https://blog.modelcontextprotocol.io/) | RSS 文章列表比對(`mcp-blog`) | 全部 | 2026-08-24 |
+| 5 | [Anthropic engineering](https://www.anthropic.com/engineering) | 文章 slug 集合比對(`anthropic-eng`) | P1 P4 P6 | 2026-08-24 |
+| 6 | [Cloudflare blog · MCP tag](https://blog.cloudflare.com/tag/mcp/) | RSS 文章列表比對(`cf-mcp`) | P1 | 2026-08-24 |
 
 ## 原則 ↔ 證據源映射(源報警時複核哪幾條)
 
